@@ -1,0 +1,8 @@
+---
+mapping:
+  url:
+    source:
+    target:
+  knowledge_base:
+    - source:
+      target:
