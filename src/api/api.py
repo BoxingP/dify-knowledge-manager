@@ -2,9 +2,9 @@ import requests
 
 
 class Api(object):
-    def __init__(self, base_url, headers=None):
+    def __init__(self, base_url, secret_header=None):
         self.base_url = base_url
-        self.headers = headers
+        self.secret_header = secret_header
 
     def request(self, method, endpoint, **kwargs):
         url = f'{self.base_url}/{endpoint}'
@@ -16,14 +16,21 @@ class Api(object):
             return None
         return response.json()
 
-    def fetch_data(self, endpoint, params=None):
-        return self.request('GET', endpoint, params=params, headers=self.headers)
+    def _merge_headers(self, headers: dict):
+        return {**self.secret_header, **(headers or {})}
 
-    def post_data(self, endpoint, data=None):
-        return self.request('POST', endpoint, json=data, headers=self.headers)
+    def fetch_data(self, endpoint, headers=None, params=None):
+        headers = self._merge_headers(headers)
+        return self.request('GET', endpoint, params=params, headers=headers)
 
-    def put_data(self, endpoint, data=None):
-        return self.request('PUT', endpoint, json=data, headers=self.headers)
+    def post_data(self, endpoint, headers=None, data=None):
+        headers = self._merge_headers(headers)
+        return self.request('POST', endpoint, json=data, headers=headers)
 
-    def delete_data(self, endpoint):
-        return self.request('DELETE', endpoint, headers=self.headers)
+    def put_data(self, endpoint, headers=None, data=None):
+        headers = self._merge_headers(headers)
+        return self.request('PUT', endpoint, json=data, headers=headers)
+
+    def delete_data(self, endpoint, headers=None):
+        headers = self._merge_headers(headers)
+        return self.request('DELETE', endpoint, headers=headers)
