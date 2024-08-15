@@ -1,7 +1,4 @@
-import datetime
-
 import pandas as pd
-from sqlalchemy import func, or_
 
 from src.database.database import Database, database_session
 from src.database.model import Document, Dataset, DocumentSegment
@@ -62,3 +59,16 @@ class AiDatabase(Database):
 
         documents = list(records.values())
         return documents
+
+    def delete_no_exist_documents(self, dataset_id: str, documents: list):
+        documents_ids = [document['id'] for document in documents]
+        with database_session(self.session) as session:
+            docs_to_delete = session.query(Document.id) \
+                .filter(~Document.id.in_(documents_ids), Document.dataset_id == dataset_id).all()
+            docs_to_delete = [document_id for document_id, in docs_to_delete]
+            if docs_to_delete:
+                session.query(DocumentSegment) \
+                    .filter(DocumentSegment.document_id.in_(docs_to_delete)).delete(synchronize_session='fetch')
+                session.query(Document) \
+                    .filter(Document.id.in_(docs_to_delete)).delete(synchronize_session='fetch')
+                session.commit()

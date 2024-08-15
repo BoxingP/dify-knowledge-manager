@@ -14,14 +14,15 @@ def get_knowledge_base_documents():
     source_api = DifyApi(source_url, config.mapping['secret_key']['source'])
     ai_database = AiDatabase()
     for item in config.mapping['knowledge_base']:
-        dataset_id = source_api.get_dataset_id_by_name(item['source'])
-        knowledge_base = {'id': dataset_id, 'url': source_url, 'name': item['source']}
-        ai_database.save_knowledge_base_info(knowledge_base)
-        documents = source_api.get_documents_in_dataset(knowledge_base['id'])
-        for document in documents:
-            document['dataset_id'] = knowledge_base['id']
+        source_dataset_id = source_api.get_dataset_id_by_name(item['source'])
+        source_knowledge_base = {'id': source_dataset_id, 'url': source_url, 'name': item['source']}
+        ai_database.save_knowledge_base_info(source_knowledge_base)
+        source_documents = source_api.get_documents_in_dataset(source_dataset_id)
+        ai_database.delete_no_exist_documents(source_dataset_id, source_documents)
+        for document in source_documents:
+            document['dataset_id'] = source_dataset_id
             ai_database.save_document(document)
-            segments = source_api.get_segments_from_document(knowledge_base['id'], document['id'])
+            segments = source_api.get_segments_from_document(source_dataset_id, document['id'])
             ai_database.delete_no_exist_segment(document['id'], [segment['id'] for segment in segments])
             for segment in segments:
                 keywords = segment['keywords']
