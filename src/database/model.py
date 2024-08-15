@@ -44,3 +44,10 @@ class DocumentSegment(Base):
     created_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
     updated_by = Column(VARCHAR(255))
     updated_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
+
+
+class UploadFiles(Base):
+    __tablename__ = 'upload_files'
+
+    id = Column(Uuid, primary_key=True)
+    key = Column(VARCHAR(255))

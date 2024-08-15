@@ -57,7 +57,8 @@ class DifyApi(Api):
         response = self.fetch_data(endpoint, headers=headers)
         segments = response['data']
         keys = ['id', 'position', 'document_id', 'content', 'answer', 'keywords']
-        return [{key: segment[key] for key in keys} for segment in segments]
+        segments_list = [{key: segment[key] for key in keys} for segment in segments]
+        return sorted(segments_list, key=lambda segment: segment['position'])
 
     def create_segment_in_document(self, dataset_id, document_id, content, answer, keywords):
         headers = {'Content-Type': 'application/json'}
@@ -65,5 +66,38 @@ class DifyApi(Api):
         data = {
             'segments': [{'content': content, 'answer': answer, 'keywords': keywords}]
         }
+        response = self.post_data(endpoint, headers=headers, data=data)
+        return response
+
+    def create_document_by_file(self, dataset_id, file_path):
+        endpoint = f'datasets/{dataset_id}/document/create_by_file'
+        data = {
+            'indexing_technique': 'high_quality',
+            'process_rule': {
+                'rules': {
+                    'pre_processing_rules': [
+                        {'id': 'remove_extra_spaces', 'enabled': True}, {'id': 'remove_urls_emails', 'enabled': False}
+                    ],
+                    'segmentation': {'separator': '\n', 'max_tokens': 1000}
+                },
+                'mode': 'custom'
+            }
+        }
+        response = self.post_data(endpoint, data=data, file_path=file_path)
+        return response
+
+    def update_segment_in_document(self, dataset_id, document_id, segment_id, content,
+                                   answer=None, keywords: list = None, enabled=None):
+        headers = {'Content-Type': 'application/json'}
+        endpoint = f'datasets/{dataset_id}/documents/{document_id}/segments/{segment_id}'
+        data = {
+            'segment': {'content': content}
+        }
+        if answer is not None:
+            data['segment']['answer'] = answer
+        if keywords is not None:
+            data['segment']['keywords'] = keywords
+        if enabled is not None:
+            data['segment']['enabled'] = enabled
         response = self.post_data(endpoint, headers=headers, data=data)
         return response

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import requests
 
 
@@ -23,9 +26,15 @@ class Api(object):
         headers = self._merge_headers(headers)
         return self.request('GET', endpoint, params=params, headers=headers)
 
-    def post_data(self, endpoint, headers=None, data=None):
+    def post_data(self, endpoint, headers=None, data=None, file_path: Path = None):
         headers = self._merge_headers(headers)
-        return self.request('POST', endpoint, json=data, headers=headers)
+        if file_path:
+            data = {'data': (None, json.dumps(data), 'text/plain')}
+            with open(file_path, 'rb') as file:
+                files = {'file': (file_path.name, file)}
+                return self.request('POST', endpoint, headers=headers, files={**data, **files})
+        else:
+            return self.request('POST', endpoint, json=data, headers=headers)
 
     def put_data(self, endpoint, headers=None, data=None):
         headers = self._merge_headers(headers)

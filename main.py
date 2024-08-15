@@ -1,5 +1,11 @@
+import re
+from pathlib import Path
+
+from docx import Document
+
 from src.api.dify_api import DifyApi
 from src.database.ai_database import AiDatabase
+from src.database.dify_database import DifyDatabase
 from src.utils.config import config
 
 
@@ -57,9 +63,106 @@ def add_documents_to_knowledge_base():
         upload_document_to_knowledge_base(target_api, item['target'], documents)
 
 
+def get_images_from_document(document_segments: list) -> list:
+    pattern = r'!\[image\]\(/files/(.*?)/image-preview\)'
+    processed_data = []
+    for record in document_segments:
+        images = []
+        for segment in record['segments']:
+            uuids = re.findall(pattern, segment['content'])
+            images.extend(uuids)
+        if images:
+            new_record = {
+                'dataset_id': record['dataset_id'],
+                'document_id': record['document_id'],
+                'images': images
+            }
+            processed_data.append(new_record)
+    return processed_data
+
+
+def add_images_to_word_file(images: list, file_path: Path):
+    doc = Document()
+    for image in images:
+        doc.add_picture(image.as_posix())
+        doc.add_paragraph()
+    doc.save(file_path.as_posix())
+
+
+def get_images_from_segments(data_list: list):
+    pattern = r'!\[image\]\(/files/(.*?)/image-preview\)'
+    images = []
+    for record in data_list:
+        images.extend(re.findall(pattern, record['content']))
+    return images
+
+
+def replace_images_in_documents():
+    source_url = config.mapping['url']['source']
+    source_api = DifyApi(source_url, config.mapping['secret_key']['source'])
+    target_url = config.mapping['url']['target']
+    target_api = DifyApi(target_url, config.mapping['secret_key']['target'])
+    assets_file_root_path = Path(__file__).parent.absolute() / Path('src/assets')
+    word_file_root_path = assets_file_root_path / Path('word_files')
+
+    for dataset in config.mapping['knowledge_base']:
+        documents_list = []
+        source_dataset_id = source_api.get_dataset_id_by_name(dataset['source'])
+        source_documents = source_api.get_documents_in_dataset(source_dataset_id)
+        for document in source_documents:
+            segments = source_api.get_segments_from_document(source_dataset_id, document['id'])
+            document_segments = {
+                'dataset_id': source_dataset_id,
+                'document_id': document['id'],
+                'segments': [
+                    {
+                        'id': segment['id'],
+                        'position': segment['position'],
+                        'content': segment['content'],
+                    }
+                    for segment in segments
+                ]
+            }
+            documents_list.append(document_segments)
+        if documents_list:
+            documents_with_images = get_images_from_document(documents_list)
+            if documents_with_images:
+                images_mapping = {}
+                target_dataset_id = target_api.get_dataset_id_by_name(dataset['target'])
+                dify_database = DifyDatabase()
+                for document in documents_with_images:
+                    source_images = document['images']
+                    images = []
+                    for id_ in source_images:
+                        image_path = assets_file_root_path / dify_database.get_image_path(id_)
+                        images.append(image_path)
+                    word_file_path = word_file_root_path / f'{document["document_id"]}.docx'
+                    add_images_to_word_file(images, word_file_path)
+                    response = target_api.create_document_by_file(target_dataset_id, word_file_path)
+                    images_document_id = response['document']['id']
+                    target_images_segments = target_api.get_segments_from_document(target_dataset_id,
+                                                                                   images_document_id)
+                    target_api.delete_document(target_dataset_id, images_document_id)
+                    target_images = get_images_from_segments(target_images_segments)
+                    images_mapping.update(dict(zip(source_images, target_images)))
+
+                target_documents = target_api.get_documents_in_dataset(target_dataset_id)
+                for document in target_documents:
+                    segments = source_api.get_segments_from_document(target_dataset_id, document['id'])
+                    for segment in segments:
+                        origin_segment_content = segment['content']
+                        for key, value in images_mapping.items():
+                            segment['content'] = segment['content'].replace(key, value)
+                        if segment['content'] != origin_segment_content:
+                            target_api.update_segment_in_document(
+                                target_dataset_id, segment['document_id'], segment['id'],
+                                segment['content'], segment['answer'], segment['keywords'], True)
+
+
 def main():
     get_knowledge_base_documents()
     add_documents_to_knowledge_base()
+    replace_images_in_documents()
 
 
 if __name__ == '__main__':
