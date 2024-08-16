@@ -1,7 +1,10 @@
 import re
+import time
 from pathlib import Path
 
+from PIL import Image
 from docx import Document
+from docx.image.exceptions import UnrecognizedImageError
 
 from src.api.dify_api import DifyApi
 from src.database.ai_database import AiDatabase
@@ -82,10 +85,20 @@ def get_images_from_document(document_segments: list) -> list:
     return processed_data
 
 
+def convert_image_to_jpg(image_path: Path) -> Path:
+    jpg_image_path = f'{image_path.parent.parent / Path("converted") / image_path.stem}.jpg'
+    Image.open(image_path).convert('RGB').save(jpg_image_path)
+    return Path(jpg_image_path)
+
+
 def add_images_to_word_file(images: list, file_path: Path):
     doc = Document()
     for image in images:
-        doc.add_picture(image.as_posix())
+        try:
+            doc.add_picture(image.as_posix())
+        except UnrecognizedImageError:
+            jpg_image_path = convert_image_to_jpg(image)
+            doc.add_picture(jpg_image_path.as_posix())
         doc.add_paragraph()
     doc.save(file_path.as_posix())
 
@@ -96,6 +109,10 @@ def get_images_from_segments(data_list: list):
     for record in data_list:
         images.extend(re.findall(pattern, record['content']))
     return images
+
+
+class IndexingNotCompletedError(Exception):
+    pass
 
 
 def replace_images_in_documents():
@@ -143,6 +160,14 @@ def replace_images_in_documents():
                     images_document_id = response['document']['id']
                     target_images_segments = target_api.get_segments_from_document(target_dataset_id,
                                                                                    images_document_id)
+                    limit = 0
+                    while target_api.get_document_embedding_status(target_dataset_id, response['batch'],
+                                                                   images_document_id) != 'completed' and limit < 3:
+                        limit += 1
+                        time.sleep(5)
+                    if target_api.get_document_embedding_status(target_dataset_id, response['batch'],
+                                                                images_document_id) != 'completed' and limit == 3:
+                        raise IndexingNotCompletedError('Indexing not completed')
                     target_api.delete_document(target_dataset_id, images_document_id)
                     target_images = get_images_from_segments(target_images_segments)
                     images_mapping.update(dict(zip(source_images, target_images)))

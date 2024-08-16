@@ -101,3 +101,11 @@ class DifyApi(Api):
             data['segment']['enabled'] = enabled
         response = self.post_data(endpoint, headers=headers, data=data)
         return response
+
+    def get_document_embedding_status(self, dataset_id, batch_id, document_id):
+        endpoint = f'datasets/{dataset_id}/documents/{batch_id}/indexing-status'
+        response = self.fetch_data(endpoint)
+        for item in response['data']:
+            if item['id'] == document_id:
+                return item['indexing_status']
+        return ''
