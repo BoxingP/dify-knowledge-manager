@@ -104,7 +104,7 @@ def add_images_to_word_file(images: list, file_path: Path):
 
 
 def get_images_from_segments(data_list: list):
-    pattern = r'!\[image\]\(/files/(.*?)/image-preview\)'
+    pattern = r'!\[image\]\([^)]*/files/(.*?)/image-preview\)'
     images = []
     for record in data_list:
         images.extend(re.findall(pattern, record['content']))
@@ -158,8 +158,6 @@ def replace_images_in_documents():
                     add_images_to_word_file(images, word_file_path)
                     response = target_api.create_document_by_file(target_dataset_id, word_file_path)
                     images_document_id = response['document']['id']
-                    target_images_segments = target_api.get_segments_from_document(target_dataset_id,
-                                                                                   images_document_id)
                     limit = 0
                     while target_api.get_document_embedding_status(target_dataset_id, response['batch'],
                                                                    images_document_id) != 'completed' and limit < 3:
@@ -168,13 +166,15 @@ def replace_images_in_documents():
                     if target_api.get_document_embedding_status(target_dataset_id, response['batch'],
                                                                 images_document_id) != 'completed' and limit == 3:
                         raise IndexingNotCompletedError('Indexing not completed')
-                    target_api.delete_document(target_dataset_id, images_document_id)
+                    target_images_segments = target_api.get_segments_from_document(target_dataset_id,
+                                                                                   images_document_id)
                     target_images = get_images_from_segments(target_images_segments)
                     images_mapping.update(dict(zip(source_images, target_images)))
+                    target_api.delete_document(target_dataset_id, images_document_id)
 
                 target_documents = target_api.get_documents_in_dataset(target_dataset_id)
                 for document in target_documents:
-                    segments = source_api.get_segments_from_document(target_dataset_id, document['id'])
+                    segments = target_api.get_segments_from_document(target_dataset_id, document['id'])
                     for segment in segments:
                         origin_segment_content = segment['content']
                         for key, value in images_mapping.items():
