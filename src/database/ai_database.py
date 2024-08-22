@@ -11,30 +11,45 @@ class AiDatabase(Database):
     def save_knowledge_base_info(self, knowledge_base: dict):
         table = Dataset
         self.create_table_if_not_exists(table)
-        self.update_or_insert_data(pd.DataFrame(knowledge_base, index=[0]), table)
+        self.update_or_insert_data(pd.DataFrame.from_records([knowledge_base]), table)
 
-    def save_document(self, document: dict):
+    def save_documents(self, documents: list):
         table = Document
         self.create_table_if_not_exists(table)
-        self.update_or_insert_data(pd.DataFrame(document, index=[0]), table)
+        self.update_or_insert_data(pd.DataFrame(documents), table)
 
-    def save_document_segment(self, segment: dict):
+    def remove_documents(self, document_ids: list):
+        with database_session(self.session) as session:
+            session.query(DocumentSegment) \
+                .filter(DocumentSegment.document_id.in_(document_ids)).delete(synchronize_session='fetch')
+            session.query(Document) \
+                .filter(Document.id.in_(document_ids)).delete(synchronize_session='fetch')
+            session.commit()
+
+    def save_segments(self, segments: list):
         table = DocumentSegment
         self.create_table_if_not_exists(table)
-        self.update_or_insert_data(pd.DataFrame.from_records([segment]), table)
+        self.update_or_insert_data(pd.DataFrame(segments), table)
 
-    def delete_no_exist_segment(self, document_id, segment_ids):
+    def remove_segments(self, document_id, segment_ids=None):
         with database_session(self.session) as session:
-            stmt = session.query(DocumentSegment) \
-                .filter(DocumentSegment.document_id == document_id, ~DocumentSegment.id.in_(segment_ids))
+            if segment_ids is None:
+                stmt = session.query(DocumentSegment) \
+                    .filter(DocumentSegment.document_id == document_id)
+            else:
+                stmt = session.query(DocumentSegment) \
+                    .filter(DocumentSegment.document_id == document_id, DocumentSegment.id.in_(segment_ids))
             stmt.delete(synchronize_session='fetch')
             session.commit()
 
-    def get_knowledge_base_documents(self, url: str, dataset_name: str) -> list:
+    def get_documents_segments(self, url: str, dataset_id: str) -> list:
         with database_session(self.session) as session:
             query = session.query(
-                Document.id,
+                Document.id.label('document_id'),
+                Document.position.label('document_position'),
                 Document.name,
+                Dataset.id.label('dataset_id'),
+                DocumentSegment.id.label('segment_id'),
                 DocumentSegment.position,
                 DocumentSegment.content,
                 DocumentSegment.answer,
@@ -44,31 +59,43 @@ class AiDatabase(Database):
             ).outerjoin(
                 Dataset, Dataset.id == Document.dataset_id
             ).filter(
-                Dataset.url == url, Dataset.name == dataset_name
+                Dataset.url == url, Dataset.id == dataset_id
             )
             results = query.all()
         records = {}
         for result in results:
-            record = records.get(result.id)
+            record = records.get(result.document_id)
             if record is None:
-                record = {"id": str(result.id), "name": result.name, "segment": []}
-                records[result.id] = record
-            segment = {"position": result.position, "content": result.content, "answer": result.answer,
-                       "keywords": result.keywords.split(",")}
-            record["segment"].append(segment)
+                record = {
+                    'id': str(result.document_id),
+                    'position': result.document_position,
+                    'name': result.name,
+                    'dataset_id': str(result.dataset_id),
+                    'segment': []
+                }
+                records[result.document_id] = record
+            segment = {
+                'id': str(result.segment_id),
+                'position': result.position,
+                'document_id': str(result.document_id),
+                'content': result.content,
+                'answer': result.answer,
+                'keywords': result.keywords.split(',')
+            }
+            record['segment'].append(segment)
 
-        documents = list(records.values())
-        return documents
+        return list(records.values())
 
-    def delete_no_exist_documents(self, dataset_id: str, documents: list):
-        documents_ids = [document['id'] for document in documents]
+    def get_documents(self, dataset_id: str):
         with database_session(self.session) as session:
-            docs_to_delete = session.query(Document.id) \
-                .filter(~Document.id.in_(documents_ids), Document.dataset_id == dataset_id).all()
-            docs_to_delete = [document_id for document_id, in docs_to_delete]
-            if docs_to_delete:
-                session.query(DocumentSegment) \
-                    .filter(DocumentSegment.document_id.in_(docs_to_delete)).delete(synchronize_session='fetch')
-                session.query(Document) \
-                    .filter(Document.id.in_(docs_to_delete)).delete(synchronize_session='fetch')
-                session.commit()
+            results = session.query(Document).filter(Document.dataset_id == dataset_id).all()
+        dict_results = [
+            {
+                'id': str(result.id),
+                'position': result.position,
+                'name': result.name,
+                'dataset_id': str(result.dataset_id)
+            }
+            for result in results
+        ]
+        return dict_results
