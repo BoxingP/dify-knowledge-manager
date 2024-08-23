@@ -42,7 +42,7 @@ class AiDatabase(Database):
             stmt.delete(synchronize_session='fetch')
             session.commit()
 
-    def get_documents_segments(self, url: str, dataset_id: str) -> list:
+    def get_documents(self, url: str, dataset_id: str, with_segment=False) -> list:
         with database_session(self.session) as session:
             query = session.query(
                 Document.id.label('document_id'),
@@ -70,32 +70,20 @@ class AiDatabase(Database):
                     'id': str(result.document_id),
                     'position': result.document_position,
                     'name': result.name,
-                    'dataset_id': str(result.dataset_id),
-                    'segment': []
+                    'dataset_id': str(result.dataset_id)
                 }
+                if with_segment:
+                    record['segment'] = []
                 records[result.document_id] = record
-            segment = {
-                'id': str(result.segment_id),
-                'position': result.position,
-                'document_id': str(result.document_id),
-                'content': result.content,
-                'answer': result.answer,
-                'keywords': result.keywords.split(',')
-            }
-            record['segment'].append(segment)
+            if with_segment:
+                segment = {
+                    'id': str(result.segment_id),
+                    'position': result.position,
+                    'document_id': str(result.document_id),
+                    'content': result.content,
+                    'answer': result.answer,
+                    'keywords': result.keywords.split(',')
+                }
+                record['segment'].append(segment)
 
         return list(records.values())
-
-    def get_documents(self, dataset_id: str):
-        with database_session(self.session) as session:
-            results = session.query(Document).filter(Document.dataset_id == dataset_id).all()
-        dict_results = [
-            {
-                'id': str(result.id),
-                'position': result.position,
-                'name': result.name,
-                'dataset_id': str(result.dataset_id)
-            }
-            for result in results
-        ]
-        return dict_results
