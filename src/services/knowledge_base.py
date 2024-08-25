@@ -88,8 +88,7 @@ class KnowledgeBase(object):
             self.wait_document_embedding(batch_id, document_id)
             sorted_segments = sorted(document['segment'], key=lambda x: x['position'])
             for segment in sorted_segments:
-                self.api.create_segment_in_document(
-                    self.dataset_id, document_id, segment['content'], segment['answer'], segment['keywords'])
+                self.api.create_segment_in_document(self.dataset_id, document_id, segment)
 
     def get_image_paths(self, image_uuids: list):
         image_paths = []

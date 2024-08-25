@@ -60,11 +60,16 @@ class DifyApi(Api):
         segments_list = [{key: segment[key] for key in keys} for segment in segments]
         return sorted(segments_list, key=lambda segment: segment['position'])
 
-    def create_segment_in_document(self, dataset_id, document_id, content, answer, keywords):
+    def create_segment_in_document(self, dataset_id, document_id, segment: dict):
         headers = {'Content-Type': 'application/json'}
         endpoint = f'datasets/{dataset_id}/documents/{document_id}/segments'
         data = {
-            'segments': [{'content': content, 'answer': answer, 'keywords': keywords}]
+            'segments': [
+                {'content': segment.get('content'),
+                 'answer': segment.get('answer', ''),
+                 'keywords': segment.get('keywords', [])
+                 }
+            ]
         }
         response = self.post_data(endpoint, headers=headers, data=data)
         return response
