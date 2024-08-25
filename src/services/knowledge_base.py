@@ -118,7 +118,7 @@ class KnowledgeBase(object):
                                             segment['answer'], segment['keywords'], True)
 
     def convert_image_to_jpg(self, image_path: Path) -> Path:
-        jpg_image_path = self.assets_root_path / Path('converted') / f'{image_path.stem}.jpg'
+        jpg_image_path = self.assets_root_path / Path('image_files/converted') / f'{image_path.stem}.jpg'
         Image.open(image_path).convert('RGB').save(jpg_image_path)
         return Path(jpg_image_path)
 
