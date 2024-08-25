@@ -84,7 +84,8 @@ class KnowledgeBase(object):
                 exist_document_id = self.get_document_id_by_name(document['name'], exist_documents)
                 if exist_document_id:
                     self.api.delete_document(self.dataset_id, exist_document_id)
-            document_id = self.api.create_document(self.dataset_id, document['name'])
+            document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
+            self.wait_document_embedding(batch_id, document_id)
             sorted_segments = sorted(document['segment'], key=lambda x: x['position'])
             for segment in sorted_segments:
                 self.api.create_segment_in_document(
@@ -97,17 +98,20 @@ class KnowledgeBase(object):
             image_paths.append(image_path)
         return image_paths
 
+    def wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 6):
+        index = 0
+        while self.api.get_document_embedding_status(self.dataset_id, batch_id, document_id) != status:
+            if index == retry:
+                raise IndexingNotCompletedError(
+                    f'Indexing not completed after {retry} attempts for document_id: {document_id}')
+            index += 1
+            time.sleep(5)
+
     def create_document_by_file(self, file_path):
         response = self.api.create_document_by_file(self.dataset_id, file_path)
         document_id = response['document']['id']
         batch_id = response['batch']
-        limit = 0
-        while self.api.get_document_embedding_status(self.dataset_id, batch_id, document_id) != 'completed':
-            if limit == 6:
-                raise IndexingNotCompletedError(
-                    f'Indexing not completed after {limit} attempts for document_id: {document_id}')
-            limit += 1
-            time.sleep(5)
+        self.wait_document_embedding(batch_id, document_id)
         return document_id
 
     def delete_document(self, document_id):

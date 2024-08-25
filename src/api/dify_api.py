@@ -42,7 +42,7 @@ class DifyApi(Api):
             }
         }
         response = self.post_data(f'datasets/{dataset_id}/document/create_by_text', headers=headers, data=data)
-        return response['document']['id']
+        return response['document']['id'], response['batch']
 
     def delete_document(self, dataset_id, document_id):
         try:
