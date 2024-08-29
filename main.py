@@ -8,7 +8,7 @@ def get_source_knowledge_base_documents():
     for kb_mapping in config.mapping['knowledge_base']:
         source_kb = KnowledgeBase(source_api, kb_mapping['source'])
         source_kb.save_knowledge_base_info_to_db()
-        source_documents = source_kb.get_documents(source='db', with_segment=True)
+        source_documents = source_kb.get_documents(source='api', with_segment=True)
         source_kb.sync_documents_to_db(source_documents)
 
 
