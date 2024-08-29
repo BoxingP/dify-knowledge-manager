@@ -51,8 +51,7 @@ class KnowledgeBase(object):
             for document in documents:
                 if document['id'] == document_id:
                     return document
-                else:
-                    return None
+            return None
         return documents
 
     def sync_documents_to_db(self, documents):
@@ -108,6 +107,8 @@ class KnowledgeBase(object):
 
     def create_document_by_file(self, file_path):
         response = self.api.create_document_by_file(self.dataset_id, file_path)
+        if response is None:
+            return None
         document_id = response['document']['id']
         batch_id = response['batch']
         self.wait_document_embedding(batch_id, document_id)
@@ -143,7 +144,23 @@ class KnowledgeBase(object):
             word_file_path = self.assets_root_path / Path('word_files') / Path(f"{document['id']}.docx")
             self.add_images_to_word_file(image_paths, word_file_path)
             word_file_id = self.create_document_by_file(word_file_path)
-            word_document = self.get_documents('api', document_id=word_file_id, with_segment=True, with_image=True)
-            images_mapping.update(dict(zip(document['image'], word_document['image'])))
-            self.delete_document(word_file_id)
+            word_documents = [word_file_id]
+            if word_file_id is None:
+                midpoint = len(image_paths) // 2
+                first_half = image_paths[:midpoint]
+                second_half = image_paths[midpoint:]
+                first_file_path = self.assets_root_path / Path('word_files') / Path(f"{document['id']}-1.docx")
+                second_file_path = self.assets_root_path / Path('word_files') / Path(f"{document['id']}-2.docx")
+                self.add_images_to_word_file(first_half, first_file_path)
+                self.add_images_to_word_file(second_half, second_file_path)
+                first_file_id = self.create_document_by_file(first_file_path)
+                second_file_id = self.create_document_by_file(second_file_path)
+                word_documents = [first_file_id, second_file_id]
+            new_images = []
+            for document_id in word_documents:
+                word_document = self.get_documents('api', document_id=document_id, with_segment=True, with_image=True)
+                new_images.extend(word_document['image'])
+                self.delete_document(document_id)
+            images_mapping.update(dict(zip(document['image'], new_images)))
+
         return images_mapping
