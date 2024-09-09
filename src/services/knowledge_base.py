@@ -9,6 +9,8 @@ from docx.image.exceptions import UnrecognizedImageError
 from src.api.dify_api import DifyApi
 from src.database.ai_database import AiDatabase
 from src.database.dify_database import DifyDatabase
+from src.services.s3_handler import S3Handler
+from src.utils.config import config
 
 
 class IndexingNotCompletedError(Exception):
@@ -91,9 +93,13 @@ class KnowledgeBase(object):
 
     def get_image_paths(self, image_uuids: list):
         image_paths = []
+        s3_handler = S3Handler(config.aws['access_key_id'], config.aws['secret_access_key'],
+                               config.aws['region'], config.aws['s3_bucket'])
         for uuid in image_uuids:
-            image_path = self.assets_root_path / self.dify_db.get_image_path(uuid)
-            image_paths.append(image_path)
+            image_path_in_dify = self.dify_db.get_image_path(uuid)
+            if s3_handler.find_and_download_file(str(image_path_in_dify.as_posix()), config.image_location):
+                image_path = config.image_location / image_path_in_dify.name
+                image_paths.append(image_path)
         return image_paths
 
     def wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 6):

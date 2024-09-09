@@ -21,6 +21,11 @@ class Config(object):
             self.mapping = self.app_config['mapping']
             self.mapping['secret_key'] = {"source": os.getenv('SOURCE_SECRET_KEY'),
                                           "target": os.getenv('TARGET_SECRET_KEY')}
+            self.aws = {'access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
+                        'secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
+                        's3_bucket': os.getenv('AWS_S3_BUCKET'),
+                        'region': os.getenv('AWS_REGION')}
+            self.image_location = Path(*self.app_config['image_location'].split(',')).resolve()
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent
