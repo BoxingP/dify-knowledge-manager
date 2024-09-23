@@ -1,4 +1,5 @@
 ---
+data_location: /,tmp,dify,data
 image_location: /,tmp,dify,images
 mapping:
   url:
@@ -7,3 +8,5 @@ mapping:
   knowledge_base:
     - source:
       target:
+upload:
+  url:

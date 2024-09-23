@@ -26,6 +26,8 @@ class Config(object):
                         's3_bucket': os.getenv('AWS_S3_BUCKET'),
                         'region': os.getenv('AWS_REGION')}
             self.image_location = Path(*self.app_config['image_location'].split(',')).resolve()
+            self.data_location = Path(*self.app_config['data_location'].split(',')).resolve()
+            self.upload = {'url': self.app_config['upload']['url'], 'secret_key': os.getenv('UPLOAD_SECRET_KEY')}
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent
