@@ -27,7 +27,9 @@ class Config(object):
                         'region': os.getenv('AWS_REGION')}
             self.image_location = Path(*self.app_config['image_location'].split(',')).resolve()
             self.data_location = Path(*self.app_config['data_location'].split(',')).resolve()
-            self.upload = {'url': self.app_config['upload']['url'], 'secret_key': os.getenv('UPLOAD_SECRET_KEY')}
+            self.upload = {'url': self.app_config['upload']['url'],
+                           'secret_key': os.getenv('UPLOAD_SECRET_KEY'),
+                           'dataset_name': self.app_config['upload']['knowledge_base']}
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent

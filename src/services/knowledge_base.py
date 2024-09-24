@@ -92,7 +92,9 @@ class KnowledgeBase(object):
                 self.api.create_segment_in_document(self.dataset_id, document_id, segment)
 
     def upload_document(self, documents: list, replace_document=True):
-        exist_documents = self.get_documents(source='api')
+        exist_documents = None
+        if replace_document:
+            exist_documents = self.get_documents(source='api')
         for document in documents:
             if replace_document:
                 exist_document_id = self.get_document_id_by_name(document['name'], exist_documents)
@@ -113,7 +115,7 @@ class KnowledgeBase(object):
                 image_paths.append(image_path)
         return image_paths
 
-    def wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 60):
+    def wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 600):
         index = 0
         while self.api.get_document_embedding_status(self.dataset_id, batch_id, document_id) != status:
             if index == retry:

@@ -1,3 +1,7 @@
+import time
+
+from urllib3.exceptions import ConnectTimeoutError
+
 from src.api.api import Api
 
 
@@ -31,7 +35,7 @@ class DifyApi(Api):
 
         return documents
 
-    def create_document(self, dataset_id, document_name):
+    def create_document(self, dataset_id, document_name, max_retry=3, backoff_factor=1):
         headers = {'Content-Type': 'application/json'}
         data = {
             'name': document_name,
@@ -41,8 +45,19 @@ class DifyApi(Api):
                 'mode': 'automatic'
             }
         }
-        response = self.post_data(f'datasets/{dataset_id}/document/create_by_text', headers=headers, data=data)
-        return response['document']['id'], response['batch']
+        for retry in range(max_retry):
+            response = self.post_data(f'datasets/{dataset_id}/document/create_by_text', headers=headers, data=data)
+            if response is not None:
+                try:
+                    return response['document']['id'], response['batch']
+                except KeyError:
+                    raise ValueError(
+                        f'Unexpected response when creating document with name {document_name}: {response}')
+            else:
+                if retry < max_retry - 1:
+                    sleep_time = backoff_factor * (2 ** retry)
+                    time.sleep(sleep_time)
+        raise ConnectTimeoutError(f'Failed to create document with name {document_name}')
 
     def delete_document(self, dataset_id, document_id):
         try:
@@ -110,7 +125,9 @@ class DifyApi(Api):
     def get_document_embedding_status(self, dataset_id, batch_id, document_id):
         endpoint = f'datasets/{dataset_id}/documents/{batch_id}/indexing-status'
         response = self.fetch_data(endpoint)
-        for item in response['data']:
-            if item['id'] == document_id:
-                return item['indexing_status']
+        if response is not None and 'data' in response:
+            for item in response['data']:
+                if 'id' in item and item['id'] == document_id:
+                    if 'indexing_status' in item:
+                        return item['indexing_status']
         return ''
