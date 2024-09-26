@@ -1,3 +1,4 @@
+import numpy as np
 import openpyxl
 import pandas as pd
 
@@ -22,3 +23,13 @@ class ExcelHandler(object):
             return dataframe
         except FileNotFoundError:
             return "The file does not exist"
+
+    def split_excel_into_files(self, file_path, rows_per_file):
+        df = self.read_excel(file_path)
+        split_count = len(df) // rows_per_file
+        if len(df) % rows_per_file != 0:
+            split_count += 1
+        df['_temp_split_group'] = np.arange(len(df)) // rows_per_file
+        for name, group_df in df.groupby('_temp_split_group'):
+            group_df.drop(columns='_temp_split_group', inplace=True)
+            group_df.to_excel(file_path.parent / f"{file_path.stem}_{name}.xlsx", index=False)
