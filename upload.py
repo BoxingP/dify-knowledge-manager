@@ -55,7 +55,7 @@ def worker(kb, queue):
     while not queue.empty():
         customer_chunk = queue.get()
         try:
-            kb.upload_document([customer_chunk], replace_document=False)
+            kb.add_document([customer_chunk], replace_document=False)
             queue.task_done()
         except Exception as ex:
             print(f'An exception occurred: {ex}, re-querying...')

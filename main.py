@@ -19,7 +19,7 @@ def sync_documents_to_target_knowledge_base():
         source_kb = KnowledgeBase(source_api, kb_mapping['source'])
         source_documents = source_kb.get_documents(source='db', with_segment=True)
         target_kb = KnowledgeBase(target_api, kb_mapping['target'])
-        target_kb.add_document(source_documents)
+        target_kb.add_document(source_documents, sort_document=True)
 
 
 def replace_images_in_target_knowledge_base_documents():

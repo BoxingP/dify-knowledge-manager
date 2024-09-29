@@ -18,10 +18,10 @@ class IndexingNotCompletedError(Exception):
 
 
 class KnowledgeBase(object):
-    def __init__(self, api: DifyApi, knowledge_base_name):
+    def __init__(self, api: DifyApi, dataset_name):
         self.api = api
-        self.dataset_id = self.api.get_dataset_id_by_name(knowledge_base_name)
-        self.dataset_name = knowledge_base_name
+        self.dataset_name = dataset_name
+        self.dataset_id = self.api.get_dataset_id_by_name(self.dataset_name)
         self.db = AiDatabase()
         self.dify_db = DifyDatabase()
         self.assets_root_path = Path(__file__).parent.parent.absolute() / Path('assets')
@@ -56,6 +56,14 @@ class KnowledgeBase(object):
             return None
         return documents
 
+    def get_segments(self, source, document_id):
+        if source == 'api':
+            return self.api.get_segments_from_document(self.dataset_id, document_id)
+        elif source == 'db':
+            return self.db.get_segments(document_id)
+        else:
+            return None
+
     def sync_documents_to_db(self, documents):
         origin_docs_in_db = self.get_documents(source='db', with_segment=True)
         docs_to_remove_in_db = [doc for doc in origin_docs_in_db if
@@ -64,6 +72,12 @@ class KnowledgeBase(object):
             self.db.remove_documents([doc['id'] for doc in docs_to_remove_in_db])
         self.db.save_documents([{k: v for k, v in document.items() if k != 'segment'} for document in documents])
         for document in documents:
+            segment_ids = [segment['id'] for segment in document['segment']]
+            origin_segment_ids = [segment['id'] for segment in self.get_segments('db', document['id'])]
+            segments_to_remove_in_db = [segment_id for segment_id in origin_segment_ids if
+                                        segment_id not in segment_ids]
+            if segments_to_remove_in_db:
+                self.db.remove_segments(document['id'], segments_to_remove_in_db)
             for segment in document['segment']:
                 keywords = segment['keywords']
                 if isinstance(keywords, list):
@@ -77,21 +91,9 @@ class KnowledgeBase(object):
                 return document['id']
         return None
 
-    def add_document(self, documents: list, replace_document=True):
-        sorted_documents = sorted(documents, key=lambda x: x['position'])
-        exist_documents = self.get_documents(source='api')
-        for document in sorted_documents:
-            if replace_document:
-                exist_document_id = self.get_document_id_by_name(document['name'], exist_documents)
-                if exist_document_id:
-                    self.api.delete_document(self.dataset_id, exist_document_id)
-            document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
-            self.wait_document_embedding(batch_id, document_id)
-            sorted_segments = sorted(document['segment'], key=lambda x: x['position'])
-            for segment in sorted_segments:
-                self.api.create_segment_in_document(self.dataset_id, document_id, segment)
-
-    def upload_document(self, documents: list, replace_document=True):
+    def add_document(self, documents: list, replace_document=True, sort_document=False):
+        if sort_document:
+            documents = sorted(documents, key=lambda x: x['position'])
         exist_documents = None
         if replace_document:
             exist_documents = self.get_documents(source='api')
@@ -102,7 +104,13 @@ class KnowledgeBase(object):
                     self.api.delete_document(self.dataset_id, exist_document_id)
             document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
             self.wait_document_embedding(batch_id, document_id)
-            self.api.create_segment_in_document(self.dataset_id, document_id, document['segment'])
+            segments = document['segment']
+            if isinstance(segments, dict):
+                segments = [segments]
+            elif sort_document:
+                segments = sorted(document['segment'], key=lambda x: x['position'])
+            for segment in segments:
+                self.api.create_segment_in_document(self.dataset_id, document_id, segment)
 
     def get_image_paths(self, image_uuids: list):
         image_paths = []

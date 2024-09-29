@@ -87,3 +87,22 @@ class AiDatabase(Database):
                 record['segment'].append(segment)
 
         return list(records.values())
+
+    def get_segments(self, document_id):
+        with database_session(self.session) as session:
+            query = session.query(
+                DocumentSegment.id,
+                DocumentSegment.position,
+                DocumentSegment.document_id,
+                DocumentSegment.content,
+                DocumentSegment.answer,
+                DocumentSegment.keywords
+            ).filter(
+                DocumentSegment.document_id == document_id
+            )
+            results = query.all()
+            keys = [column['name'] for column in query.column_descriptions]
+            segments = [{**{
+                key: str(value) if key in ['id', 'document_id'] else value.split(", ") if key == 'keywords' else value
+                for key, value in dict(zip(keys, result)).items()}} for result in results]
+            return segments
