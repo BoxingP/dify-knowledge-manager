@@ -1,13 +1,16 @@
 ---
-data_location: /,tmp,dify,data
 image_location: /,tmp,dify,images
-mapping:
-  url:
-    source:
-    target:
-  knowledge_base:
-    - source:
+sync:
+  mapping:
+    url:
+      source:
       target:
+    knowledge_base:
+      - source:
+        target:
 upload:
   url:
   knowledge_base:
+  upload_location: /,tmp,dify,upload
+  file_name: product_list.xlsx
+  mark_column: 设备名称

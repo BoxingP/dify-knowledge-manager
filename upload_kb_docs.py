@@ -15,8 +15,9 @@ def create_row_string(row):
     return result_str
 
 
-def get_data_list(file_name: str, mark_column: str, segment_size: int):
-    df = ExcelHandler().read_excel(config.data_location / file_name)
+def get_data_list(segment_size: int):
+    mark_column = config.upload_file_mark_column
+    df = ExcelHandler().read_excel(config.upload_file)
     sub_df = df.copy()
     sub_df.loc[:, :].fillna('', inplace=True)
     data_list = []
@@ -79,7 +80,7 @@ def upload_data_list_multithread(customer_data, num_threads):
 
 
 def main():
-    data_list = get_data_list(file_name='product_list.xlsx', mark_column='设备名称', segment_size=1)
+    data_list = get_data_list(segment_size=1)
     print('Data length:', len(data_list))
     start = datetime.datetime.now()
     upload_data_list_multithread(data_list, num_threads=3)

@@ -18,7 +18,7 @@ class Config(object):
         load_dotenv()
         self.app_config = self._load_app_config()
         if self.app_config:
-            self.mapping = self.app_config['mapping']
+            self.mapping = self.app_config['sync']['mapping']
             self.mapping['secret_key'] = {"source": os.getenv('SOURCE_SECRET_KEY'),
                                           "target": os.getenv('TARGET_SECRET_KEY')}
             self.aws = {'access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
@@ -26,10 +26,12 @@ class Config(object):
                         's3_bucket': os.getenv('AWS_S3_BUCKET'),
                         'region': os.getenv('AWS_REGION')}
             self.image_location = Path(*self.app_config['image_location'].split(',')).resolve()
-            self.data_location = Path(*self.app_config['data_location'].split(',')).resolve()
             self.upload = {'url': self.app_config['upload']['url'],
                            'secret_key': os.getenv('UPLOAD_SECRET_KEY'),
                            'dataset_name': self.app_config['upload']['knowledge_base']}
+            self.upload_location = Path(*self.app_config['upload']['upload_location'].split(',')).resolve()
+            self.upload_file = self.upload_location / self.app_config['upload']['file_name']
+            self.upload_file_mark_column = self.app_config['upload']['mark_column']
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent
