@@ -5,8 +5,8 @@ from src.database.model import UploadFiles
 
 
 class DifyDatabase(Database):
-    def __init__(self):
-        super(DifyDatabase, self).__init__('dify')
+    def __init__(self, database_name: str):
+        super(DifyDatabase, self).__init__(database_name)
 
     def get_image_path(self, image_id: str) -> Path:
         with database_session(self.session) as session:

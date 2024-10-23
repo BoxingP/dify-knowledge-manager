@@ -19,19 +19,14 @@ class Config(object):
         self.app_config = self._load_app_config()
         if self.app_config:
             self.mapping = self.app_config['sync']['mapping']
-            self.mapping['secret_key'] = {"source": os.getenv('SOURCE_SECRET_KEY'),
-                                          "target": os.getenv('TARGET_SECRET_KEY')}
-            self.aws = {'access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
-                        'secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
-                        's3_bucket': os.getenv('AWS_S3_BUCKET'),
-                        'region': os.getenv('AWS_REGION')}
-            self.image_location = Path(*self.app_config['image_location'].split(',')).resolve()
-            self.upload = {'url': self.app_config['upload']['url'],
-                           'secret_key': os.getenv('UPLOAD_SECRET_KEY'),
-                           'dataset_name': self.app_config['upload']['knowledge_base']}
-            self.upload_location = Path(*self.app_config['upload']['upload_location'].split(',')).resolve()
-            self.upload_file = self.upload_location / self.app_config['upload']['file_name']
+            self._create_path_attributes(self.app_config['path'])
+            self.image_dir_path = self._resolve_path('image_dir')
+            self.word_dir_path = self._resolve_path('word_dir')
+            self.convert_dir_path = self._resolve_path('convert_dir')
+            self.upload_dir_path = self._resolve_path('upload_dir')
+            self.upload_file = self.upload_dir_path / Path(self.app_config['upload']['file_name'])
             self.upload_file_mark_column = self.app_config['upload']['mark_column']
+            self.upload_dataset = self.app_config['upload']['dataset']
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent
@@ -41,6 +36,18 @@ class Config(object):
                 return yaml.safe_load(file)
         else:
             return {}
+
+    def _create_path_attributes(self, config_dict):
+        for key, value in config_dict.items():
+            setattr(self, key, value)
+
+    def _resolve_path(self, key, create_if_not_exists=True):
+        root_dir_path = getattr(self, 'root_dir').split(',')
+        dir_path = getattr(self, key.lower(), 'tmp').split(',')
+        absolute_path = Path(*root_dir_path, *dir_path).resolve()
+        if create_if_not_exists and not os.path.exists(absolute_path):
+            os.makedirs(absolute_path)
+        return absolute_path
 
     def init_db_uri(self, database_name: str):
         name = database_name.upper()
@@ -52,6 +59,20 @@ class Config(object):
         database_name = os.getenv(f'{name}_DB_NAME')
         db_uri = f'{adapter}://{user}:%s@{host}:{port}/{database_name}' % quote(password)
         return db_uri
+
+    def api_config(self, name):
+        return {
+            'api_url': os.getenv(f'{name.upper()}_API_SERVER'),
+            'auth_token': os.getenv(f'{name.upper()}_SECRET_KEY')
+        }
+
+    def s3_config(self, name):
+        return {
+            'access_key_id': os.getenv(f'{name.upper()}_ACCESS_KEY_ID'),
+            'secret_access_key': os.getenv(f'{name.upper()}_SECRET_ACCESS_KEY'),
+            'region_name': os.getenv(f'{name.upper()}_REGION'),
+            'bucket_name': os.getenv(f'{name.upper()}_S3_BUCKET')
+        }
 
 
 config = Config()

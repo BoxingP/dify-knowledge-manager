@@ -1,16 +1,15 @@
 ---
-image_location: /,tmp,dify,images
+path:
+  root_dir: /,tmp,dify
+  image_dir: assets,image_files
+  word_dir: assets,word_files
+  convert_dir: assets,image_files,converted
+  upload_dir: upload
 sync:
   mapping:
-    url:
-      source:
+    - source:
       target:
-    knowledge_base:
-      - source:
-        target:
 upload:
-  url:
-  knowledge_base:
-  upload_location: /,tmp,dify,upload
+  dataset:
   file_name: product_list.xlsx
   mark_column: 设备名称

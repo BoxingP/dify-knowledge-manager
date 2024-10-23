@@ -4,9 +4,9 @@ from src.database.database import Database, database_session
 from src.database.model import Document, Dataset, DocumentSegment
 
 
-class AiDatabase(Database):
-    def __init__(self):
-        super(AiDatabase, self).__init__('ai')
+class RecordDatabase(Database):
+    def __init__(self, database_name: str):
+        super(RecordDatabase, self).__init__(database_name)
 
     def save_knowledge_base_info(self, knowledge_base: dict):
         table = Dataset

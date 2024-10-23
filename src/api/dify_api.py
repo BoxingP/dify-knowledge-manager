@@ -9,15 +9,28 @@ class DifyApi(Api):
     def __init__(self, url, secret_key):
         super(DifyApi, self).__init__(base_url=url, secret_header={'Authorization': f'Bearer {secret_key}'})
 
-    def get_dataset_id_by_name(self, name) -> str:
-        response = self.fetch_data('datasets', params={'page': 1, 'limit': 20})
-        data = response['data']
-        dataset_id = None
-        for item in data:
-            if item['name'] == name:
-                dataset_id = item['id']
+    def get_datasets(self, limit=20, max_retry=3, backoff_factor=1):
+        page = 1
+        datasets = []
+
+        while True:
+            response = None
+            for _ in range(max_retry):
+                response = self.fetch_data('datasets', params={'page': page, 'limit': limit})
+                if response is not None:
+                    break
+                sleep_time = backoff_factor * (2 ** _)
+                time.sleep(sleep_time)
+
+            if response is None:
+                raise ConnectTimeoutError(f'Failed to get datasets in {self.base_url}')
+
+            datasets.extend(response['data'])
+            if not response.get('has_more', False):
                 break
-        return dataset_id
+            page += 1
+
+        return datasets
 
     def get_documents_in_dataset(self, dataset_id, limit=20):
         page = 1

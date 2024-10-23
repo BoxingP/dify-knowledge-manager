@@ -2,7 +2,7 @@ import datetime
 import threading
 from queue import Queue
 
-from src.api.dify_api import DifyApi
+from src.services.dify_platform import DifyPlatform
 from src.services.knowledge_base import KnowledgeBase
 from src.utils.config import config
 from src.utils.excel_handler import ExcelHandler
@@ -64,8 +64,10 @@ def worker(kb, queue):
 
 
 def upload_data_list_multithread(customer_data, num_threads):
-    api = DifyApi(config.upload['url'], config.upload['secret_key'])
-    kb = KnowledgeBase(api, config.upload['dataset_name'])
+    upload_dify = DifyPlatform(config.api_config('dev'), config.s3_config('dev'), dify_db_name='dev')
+    kb_name = config.upload_dataset
+    kb = KnowledgeBase(upload_dify.api, upload_dify.get_dataset_id_by_name(kb_name), kb_name, upload_dify.record_db,
+                       upload_dify.dify_db)
 
     queue = Queue()
     for data_chunk in customer_data:
