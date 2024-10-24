@@ -1,4 +1,4 @@
-from sqlalchemy import Column, TIMESTAMP, func, Uuid, VARCHAR, Text, Integer
+from sqlalchemy import Column, TIMESTAMP, func, Uuid, VARCHAR, Text, Integer, Boolean
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -51,3 +51,14 @@ class UploadFiles(Base):
 
     id = Column(Uuid, primary_key=True)
     key = Column(VARCHAR(255))
+
+
+class QaKnowledge(Base):
+    __tablename__ = 'qa_knowledge'
+
+    id = Column(Integer, primary_key=True)
+    question = Column(VARCHAR(1000))
+    answer = Column(VARCHAR(50000))
+    context = Column(VARCHAR(10000))
+    active = Column(Boolean)
+    department_id = Column(VARCHAR(50))

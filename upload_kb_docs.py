@@ -17,26 +17,32 @@ def create_row_string(row):
 
 def get_data_list(segment_size: int):
     mark_column = config.upload_file_mark_column
-    df = ExcelHandler().read_excel(config.upload_file)
+    keywords_column = config.upload_file_keywords_column
+    df = ExcelHandler(config.upload_file).read_excel([keywords_column] if keywords_column else None)
     sub_df = df.copy()
     sub_df.loc[:, :].fillna('', inplace=True)
     data_list = []
     temp_list = []
+    temp_keywords_list = []
     i = 1
 
     for index, row in sub_df.iterrows():
         item = create_row_string(row)
         temp_list.append(item)
+        if keywords_column:
+            temp_keywords_list.extend(row[keywords_column].split(','))
         if len(temp_list) == segment_size:
             data_dict_name = row[mark_column] if segment_size == 1 else f"{mark_column}_{i}"
             data_dict = {
                 "name": data_dict_name,
                 "segment": {
-                    "content": '\n\n---\n\n'.join(temp_list)
+                    "content": '\n\n---\n\n'.join(temp_list),
+                    "keywords": temp_keywords_list
                 }
             }
             data_list.append(data_dict)
             temp_list = []
+            temp_keywords_list = []
             i += 1
 
         if index == sub_df.index[-1] and temp_list:
@@ -44,7 +50,8 @@ def get_data_list(segment_size: int):
             data_dict = {
                 "name": data_dict_name,
                 "segment": {
-                    "content": '\n\n---\n\n'.join(temp_list)
+                    "content": '\n\n---\n\n'.join(temp_list),
+                    "keywords": temp_keywords_list
                 }
             }
             data_list.append(data_dict)

@@ -26,7 +26,11 @@ class Config(object):
             self.upload_dir_path = self._resolve_path('upload_dir')
             self.upload_file = self.upload_dir_path / Path(self.app_config['upload']['file_name'])
             self.upload_file_mark_column = self.app_config['upload']['mark_column']
+            self.upload_file_keywords_column = self.app_config['upload']['keywords_column']
             self.upload_dataset = self.app_config['upload']['dataset']
+            self.export = self.app_config['export']
+            self.export_file_path = self.upload_dir_path / Path(
+                f"{self.export['department'].strip().lower().replace(' ', '_')}_{self.export['file_name']}")
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent
