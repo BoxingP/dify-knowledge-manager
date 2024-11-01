@@ -2,7 +2,6 @@ import re
 import time
 
 from src.api.dify_api import DifyApi
-from src.database.dify_database import DifyDatabase
 from src.database.record_database import RecordDatabase
 
 
@@ -11,12 +10,11 @@ class IndexingNotCompletedError(Exception):
 
 
 class KnowledgeBase(object):
-    def __init__(self, api: DifyApi, dataset_id, dataset_name, record_db: RecordDatabase, dify_db: DifyDatabase):
+    def __init__(self, api: DifyApi, dataset_id, dataset_name, record_db: RecordDatabase):
         self.api = api
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.record_db = record_db
-        self.dify_db = dify_db
 
     def save_knowledge_base_info_to_db(self):
         knowledge_base_info = {'id': self.dataset_id, 'url': self.api.base_url, 'name': self.dataset_name}
@@ -34,7 +32,7 @@ class KnowledgeBase(object):
         else:
             return None
         if with_image:
-            pattern = r'!\[image\]\([^)]*/files/(.*?)/image-preview\)'
+            pattern = r'!\[image\]\([^)]*/files/(.*?)/(?:image-preview|file-preview)\)'
             for document in documents:
                 image = []
                 for segment in document['segment']:

@@ -102,7 +102,7 @@ class DifyApi(Api):
         response = self.post_data(endpoint, headers=headers, data=data)
         return response
 
-    def create_document_by_file(self, dataset_id, file_path):
+    def create_document_by_file(self, dataset_id, file_path, separator='\n', max_tokens=1000):
         endpoint = f'datasets/{dataset_id}/document/create_by_file'
         data = {
             'indexing_technique': 'high_quality',
@@ -111,7 +111,7 @@ class DifyApi(Api):
                     'pre_processing_rules': [
                         {'id': 'remove_extra_spaces', 'enabled': True}, {'id': 'remove_urls_emails', 'enabled': False}
                     ],
-                    'segmentation': {'separator': '\n', 'max_tokens': 1000}
+                    'segmentation': {'separator': separator, 'max_tokens': max_tokens}
                 },
                 'mode': 'custom'
             }

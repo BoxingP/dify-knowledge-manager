@@ -17,17 +17,36 @@ class SplitCountExceeded(Exception):
 
 
 class DifyPlatform(object):
-    def __init__(self, api_config: dict, s3_config: dict, dify_db_name: str, record_db_name: str = 'record'):
+    def __init__(self, api_config: dict, record_db_name: str = 'record',
+                 s3_config: dict = None, dify_db_name: str = None):
         self.api = DifyApi(api_config['api_url'], api_config['auth_token'])
-        self.s3 = S3Handler(
-            s3_config['access_key_id'],
-            s3_config['secret_access_key'],
-            s3_config['region_name'],
-            s3_config['bucket_name']
-        )
         self.datasets = self.api.get_datasets()
         self.record_db = RecordDatabase(record_db_name)
-        self.dify_db = DifyDatabase(dify_db_name)
+        self._s3_config = s3_config
+        self._s3 = None
+        self._dify_db_name = dify_db_name
+        self._dify_db = None
+
+    @property
+    def s3(self):
+        if self._s3 is None:
+            if self._s3_config is None:
+                raise Exception("'s3_config' is not set, provide valid 's3_config'")
+            self._s3 = S3Handler(
+                self._s3_config['access_key_id'],
+                self._s3_config['secret_access_key'],
+                self._s3_config['region_name'],
+                self._s3_config['bucket_name']
+            )
+        return self._s3
+
+    @property
+    def dify_db(self):
+        if self._dify_db is None:
+            if self._dify_db_name is None:
+                raise Exception("'dify_db_name' is not set, provide valid 'dify_db_name'")
+            self._dify_db = DifyDatabase(self._dify_db_name)
+        return self._dify_db
 
     def get_dataset_id_by_name(self, name) -> str:
         dataset_id = None
@@ -69,14 +88,15 @@ class DifyPlatform(object):
 
         word_documents = []
         split_image_paths = [images[i::split_count] for i in range(split_count)]
-        for i, images in enumerate(split_image_paths):
+        for i, split_images in enumerate(split_image_paths):
             file_path = config.word_dir_path / Path(f'{document_id}-{i}.docx')
-            self.add_images_to_word_file(images, file_path)
+            self.add_images_to_word_file(split_images, file_path)
             file_id = dataset.create_document_by_file(file_path)
             if file_id is not None:
                 word_documents.append(file_id)
             else:
-                word_documents.extend(self.create_word_doc(document_id, images, split_count * 2, max_split_count))
+                word_documents.extend(
+                    self.create_word_doc(dataset, document_id, split_images, split_count * 2, max_split_count))
         return word_documents
 
     def upload_images_to_dify(self, documents: list, dataset: KnowledgeBase) -> dict:
