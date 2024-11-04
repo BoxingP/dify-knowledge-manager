@@ -31,6 +31,8 @@ class Config(object):
             self.export = self.app_config['export']
             self.export_file_path = self.upload_dir_path / Path(
                 f"{self.export['department'].strip().lower().replace(' ', '_')}_{self.export['file_name']}")
+            self.erp_file = self.upload_dir_path / Path(self.app_config['erp']['file_name'])
+            self.erp_dataset = self.app_config['erp']['dataset']
 
     def _load_app_config(self):
         project_root_dir = Path(__file__).parent.parent.parent
