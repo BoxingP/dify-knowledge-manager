@@ -5,9 +5,9 @@ from urllib3.exceptions import ConnectTimeoutError
 from src.api.api import Api
 
 
-class DifyApi(Api):
+class DatasetApi(Api):
     def __init__(self, url, secret_key):
-        super(DifyApi, self).__init__(base_url=url, secret_header={'Authorization': f'Bearer {secret_key}'})
+        super(DatasetApi, self).__init__(base_url=url, secret_header={'Authorization': f'Bearer {secret_key}'})
 
     def get_datasets(self, limit=20, max_retry=3, backoff_factor=1):
         page = 1

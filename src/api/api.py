@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import requests
@@ -17,7 +18,22 @@ class Api(object):
         except requests.exceptions.RequestException as e:
             print(f'An HTTP error occurred: {e}')
             return None
-        return response.json()
+
+        if kwargs.get('stream', False):
+            events = []
+            for line in response.iter_lines():
+                line = line.strip()
+                if line:
+                    line_str = line.decode('utf-8')
+                    match = re.search(r'\w+: (\{.*})', line_str)
+                    if match:
+                        json_str = match.group(1)
+                        events.append(json.loads(json_str))
+                    else:
+                        continue
+            return events
+        else:
+            return response.json()
 
     def _merge_headers(self, headers: dict):
         return {**self.secret_header, **(headers or {})}
@@ -26,15 +42,15 @@ class Api(object):
         headers = self._merge_headers(headers)
         return self.request('GET', endpoint, params=params, headers=headers)
 
-    def post_data(self, endpoint, headers=None, data=None, file_path: Path = None):
+    def post_data(self, endpoint, headers=None, data=None, file_path: Path = None, **kwargs):
         headers = self._merge_headers(headers)
         if file_path:
             data = {'data': (None, json.dumps(data), 'text/plain')}
             with open(file_path, 'rb') as file:
                 files = {'file': (file_path.name, file)}
-                return self.request('POST', endpoint, headers=headers, files={**data, **files})
+                return self.request('POST', endpoint, headers=headers, files={**data, **files}, **kwargs)
         else:
-            return self.request('POST', endpoint, json=data, headers=headers)
+            return self.request('POST', endpoint, json=data, headers=headers, **kwargs)
 
     def put_data(self, endpoint, headers=None, data=None):
         headers = self._merge_headers(headers)

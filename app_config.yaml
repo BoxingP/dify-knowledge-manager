@@ -10,10 +10,15 @@ sync:
     - source:
       target:
 upload:
-  dataset:
-  file_name: product_list.xlsx
-  mark_column: 设备名称
-  keywords_column:
+  docx:
+    dataset:
+      details: docx files details
+      summary: docx files summary
+  excel:
+    dataset:
+    file_name: product_list.xlsx
+    mark_column: 设备名称
+    keywords_column:
 export:
   file_name: qa_info.xlsx
   department: Factory Quality Knowledge

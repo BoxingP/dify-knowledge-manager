@@ -45,7 +45,7 @@ def get_data_list(segment_size: int = None):
 def upload_data_list(data_list):
     upload_dify = DifyPlatform(api_config=config.api_config('dev'))
     kb_name = config.erp_dataset
-    kb = KnowledgeBase(upload_dify.api, upload_dify.get_dataset_id_by_name(kb_name), kb_name, upload_dify.record_db)
+    kb = KnowledgeBase(upload_dify.dataset_api, upload_dify.get_dataset_id_by_name(kb_name), kb_name, upload_dify.record_db)
     kb.add_document(data_list)
 
 

@@ -1,4 +1,5 @@
 import os
+from collections import namedtuple
 from pathlib import Path
 from urllib.parse import quote
 
@@ -16,6 +17,11 @@ class Config(object):
 
     def __init__(self):
         load_dotenv()
+        self.share_folder = {
+            'path': Path(os.getenv('SHARE_FOLDER_PATH')).resolve(),
+            'username': os.getenv('SHARE_FOLDER_USERNAME'),
+            'password': os.getenv('SHARE_FOLDER_PASSWORD')
+        }
         self.app_config = self._load_app_config()
         if self.app_config:
             self.mapping = self.app_config['sync']['mapping']
@@ -24,10 +30,12 @@ class Config(object):
             self.word_dir_path = self._resolve_path('word_dir')
             self.convert_dir_path = self._resolve_path('convert_dir')
             self.upload_dir_path = self._resolve_path('upload_dir')
-            self.upload_file = self.upload_dir_path / Path(self.app_config['upload']['file_name'])
-            self.upload_file_mark_column = self.app_config['upload']['mark_column']
-            self.upload_file_keywords_column = self.app_config['upload']['keywords_column']
-            self.upload_dataset = self.app_config['upload']['dataset']
+            self.upload_file = self.upload_dir_path / Path(self.app_config['upload']['excel']['file_name'])
+            self.upload_file_mark_column = self.app_config['upload']['excel']['mark_column']
+            self.upload_file_keywords_column = self.app_config['upload']['excel']['keywords_column']
+            self.upload_dataset = self.app_config['upload']['excel']['dataset']
+            self.details_dataset = self.app_config['upload']['docx']['dataset']['details']
+            self.summary_dataset = self.app_config['upload']['docx']['dataset']['summary']
             self.export = self.app_config['export']
             self.export_file_path = self.upload_dir_path / Path(
                 f"{self.export['department'].strip().lower().replace(' ', '_')}_{self.export['file_name']}")
@@ -67,18 +75,21 @@ class Config(object):
         return db_uri
 
     def api_config(self, name):
-        return {
-            'api_url': os.getenv(f'{name.upper()}_API_SERVER'),
-            'auth_token': os.getenv(f'{name.upper()}_SECRET_KEY')
-        }
+        api_config = namedtuple('api_config', ['url', 'app_token', 'dataset_token'])
+        return api_config(
+            os.getenv(f'{name}_api_server'.upper()),
+            os.getenv(f'{name}_app_secret_key'.upper(), None),
+            os.getenv(f'{name}_dataset_secret_key'.upper(), None)
+        )
 
     def s3_config(self, name):
-        return {
-            'access_key_id': os.getenv(f'{name.upper()}_ACCESS_KEY_ID'),
-            'secret_access_key': os.getenv(f'{name.upper()}_SECRET_ACCESS_KEY'),
-            'region_name': os.getenv(f'{name.upper()}_REGION'),
-            'bucket_name': os.getenv(f'{name.upper()}_S3_BUCKET')
-        }
+        s3_config = namedtuple('s3_config', ['access_key_id', 'secret_access_key', 'region', 'bucket'])
+        return s3_config(
+            os.getenv(f'{name}_access_key_id'.upper()),
+            os.getenv(f'{name}_secret_access_key'.upper()),
+            os.getenv(f'{name}_region'.upper()),
+            os.getenv(f'{name}_s3_bucket'.upper())
+        )
 
 
 config = Config()

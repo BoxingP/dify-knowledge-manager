@@ -1,10 +1,13 @@
+import json
+import re
 from pathlib import Path
 
 from PIL import Image
 from docx import Document
 from docx.image.exceptions import UnrecognizedImageError
 
-from src.api.dify_api import DifyApi
+from src.api.app_api import AppApi
+from src.api.dataset_api import DatasetApi
 from src.database.dify_database import DifyDatabase
 from src.database.record_database import RecordDatabase
 from src.services.knowledge_base import KnowledgeBase
@@ -17,10 +20,10 @@ class SplitCountExceeded(Exception):
 
 
 class DifyPlatform(object):
-    def __init__(self, api_config: dict, record_db_name: str = 'record',
-                 s3_config: dict = None, dify_db_name: str = None):
-        self.api = DifyApi(api_config['api_url'], api_config['auth_token'])
-        self.datasets = self.api.get_datasets()
+    def __init__(self, api_config, record_db_name: str = 'record', s3_config=None, dify_db_name: str = None):
+        self.app_api = AppApi(api_config.url, api_config.app_token)
+        self.dataset_api = DatasetApi(api_config.url, api_config.dataset_token)
+        self.datasets = self.dataset_api.get_datasets()
         self.record_db = RecordDatabase(record_db_name)
         self._s3_config = s3_config
         self._s3 = None
@@ -33,10 +36,10 @@ class DifyPlatform(object):
             if self._s3_config is None:
                 raise Exception("'s3_config' is not set, provide valid 's3_config'")
             self._s3 = S3Handler(
-                self._s3_config['access_key_id'],
-                self._s3_config['secret_access_key'],
-                self._s3_config['region_name'],
-                self._s3_config['bucket_name']
+                self._s3_config.access_key_id,
+                self._s3_config.secret_access_key,
+                self._s3_config.region,
+                self._s3_config.bucket
             )
         return self._s3
 
@@ -113,3 +116,22 @@ class DifyPlatform(object):
             images_mapping.update(dict(zip(document['image'], new_images)))
 
         return images_mapping
+
+    def fix_json_str(self, json_str):
+        json_str = re.sub(r'^[^{]*', '', json_str)
+        json_str = re.sub(r'\s*[^}\n]*$', '', json_str)
+        last_quote_index = json_str.rfind('"')
+        last_right_square_index = json_str.rfind(']')
+        last_brace_index = json_str.rfind('}')
+        if (last_quote_index > last_right_square_index
+                and re.search(r'[^\s\n]', json_str[last_quote_index + 1:last_brace_index])):
+            json_str = json_str[:last_brace_index] + '"' + json_str[last_brace_index:]
+        return json_str
+
+    def analyze_content(self, query: str):
+        response = self.app_api.query_ai_agent(query, response_mode='streaming')
+        try:
+            answer = json.loads(self.fix_json_str(response.get('answer', {})))
+        except json.JSONDecodeError:
+            answer = {}
+        return answer

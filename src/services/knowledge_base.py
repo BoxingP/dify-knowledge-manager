@@ -1,7 +1,7 @@
 import re
 import time
 
-from src.api.dify_api import DifyApi
+from src.api.dataset_api import DatasetApi
 from src.database.record_database import RecordDatabase
 
 
@@ -10,7 +10,7 @@ class IndexingNotCompletedError(Exception):
 
 
 class KnowledgeBase(object):
-    def __init__(self, api: DifyApi, dataset_id, dataset_name, record_db: RecordDatabase):
+    def __init__(self, api: DatasetApi, dataset_id, dataset_name, record_db: RecordDatabase):
         self.api = api
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
@@ -81,12 +81,18 @@ class KnowledgeBase(object):
                 return document['id']
         return None
 
-    def add_document(self, documents: list, replace_document=True, sort_document=False):
+    def add_document(self, documents, replace_document=True, sort_document=False) -> dict:
+        if isinstance(documents, dict):
+            documents = [documents]
+        elif not isinstance(documents, list):
+            raise ValueError("The 'documents' parameter must be either a dict or a list of dicts")
+
         if sort_document:
             documents = sorted(documents, key=lambda x: x['position'])
         exist_documents = None
         if replace_document:
             exist_documents = self.get_documents(source='api')
+        document_ids = {}
         for document in documents:
             if replace_document:
                 exist_document_id = self.get_document_id_by_name(document['name'], exist_documents)
@@ -101,6 +107,8 @@ class KnowledgeBase(object):
                 segments = sorted(document['segment'], key=lambda x: x['position'])
             for segment in segments:
                 self.api.create_segment_in_document(self.dataset_id, document_id, segment)
+            document_ids[document['name']] = document_id
+        return document_ids
 
     def wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 600):
         index = 0
@@ -126,3 +134,8 @@ class KnowledgeBase(object):
     def update_segment_in_document(self, segment):
         self.api.update_segment_in_document(self.dataset_id, segment['document_id'], segment['id'], segment['content'],
                                             segment['answer'], segment['keywords'], True)
+
+    def empty_dataset(self):
+        documents = self.api.get_documents_in_dataset(self.dataset_id)
+        for document in documents:
+            self.api.delete_document(self.dataset_id, document['id'])

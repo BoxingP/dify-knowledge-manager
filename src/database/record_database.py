@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.database.database import Database, database_session
-from src.database.model import Document, Dataset, DocumentSegment
+from src.database.model import Document, Dataset, DocumentSegment, DocxFiles
 
 
 class RecordDatabase(Database):
@@ -106,3 +106,21 @@ class RecordDatabase(Database):
                 key: str(value) if key in ['id', 'document_id'] else value.split(", ") if key == 'keywords' else value
                 for key, value in dict(zip(keys, result)).items()}} for result in results]
             return segments
+
+    def save_docx_file(self, docx_file: pd.DataFrame):
+        table = DocxFiles
+        self.create_table_if_not_exists(table)
+        self.update_or_insert_data(docx_file, table, ignored_columns=['id'])
+
+    def get_docx_file(self):
+        with database_session(self.session) as session:
+            query = session.query(
+                DocxFiles.name,
+                DocxFiles.extension,
+                DocxFiles.hash
+            )
+            df = pd.DataFrame.from_records(
+                query.all(),
+                columns=[column['name'] for column in query.column_descriptions]
+            )
+            return df
