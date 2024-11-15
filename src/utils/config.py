@@ -1,3 +1,4 @@
+import datetime
 import os
 from collections import namedtuple
 from pathlib import Path
@@ -13,6 +14,7 @@ class Config(object):
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Config, cls).__new__(cls)
+            cls._instance.initial_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
         return cls._instance
 
     def __init__(self):

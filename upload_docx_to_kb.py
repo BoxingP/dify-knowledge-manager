@@ -6,6 +6,7 @@ import re
 import pandas as pd
 from docx import Document
 
+from src.database.crawl_database import CrawlDatabase
 from src.services.dify_platform import DifyPlatform
 from src.services.knowledge_base import KnowledgeBase
 from src.services.windows_share_folder import WindowsShareFolder
@@ -56,6 +57,8 @@ def upload_files_to_dify(dify, files):
                                config.summary_dataset, dify.record_db)
     details_kb = KnowledgeBase(dify.dataset_api, dify.get_dataset_id_by_name(config.details_dataset),
                                config.details_dataset, dify.record_db)
+    if files.empty:
+        return
     for file in files['path']:
         docx_file = DocxHandler(file)
         docx_content = docx_file.read_content()
@@ -89,7 +92,6 @@ def upload_files_to_dify(dify, files):
         title = document_df[document_df['style'] == 'Title'].iloc[0]['text']
         release_date = extract_release_date(document_str)
         document_name = f'{release_date}: {title}'
-        origin_link = extract_origin_link(document_str)
 
         details_document = {
             'name': document_name,
@@ -109,18 +111,9 @@ def upload_files_to_dify(dify, files):
             'segment': [
                 {
                     'content': (
-                        f'#Title\n'
-                        f'{title}\n\n'
-                        f'# Release Date\n'
-                        f'{release_date}\n\n'
-                        f'# Category\n'
-                        f'{response.get("category", "")}\n\n'
-                        f'# Summary\n'
-                        f'{response.get("summary", "")}\n\n'
-                        f'"# Origin Link\n'
-                        f'{origin_link}\n\n'
-                        f'# Source Document ID\n'
-                        f'{details_document_id}'
+                        f'{details_document_id}\n'
+                        f'{release_date}\n'
+                        f'{response.get("summary", "")}'
                     ),
                     'answer': None,
                     'keywords': response.get('keywords', [])
@@ -132,7 +125,13 @@ def upload_files_to_dify(dify, files):
     dify.record_db.save_docx_file(files[['name', 'extension', 'hash']])
 
 
-def get_valid_files(dify) -> list:
+def get_first_day_of_current_month() -> int:
+    first_day = config.initial_datetime.replace(day=1)
+    return int(first_day.strftime('%Y%m%d'))
+
+
+def get_valid_files(dify) -> pd.DataFrame:
+    documents = CrawlDatabase('crawl').get_documents(get_first_day_of_current_month())
     wsd = WindowsShareFolder(
         config.share_folder['path'],
         config.share_folder['username'],
@@ -141,29 +140,32 @@ def get_valid_files(dify) -> list:
     files_list = wsd.get_files_list(
         include_subfolders=False,
         file_type='docx',
+        include_files=documents['doc_name'].tolist(),
         sort_alphabetical='desc'
     )
-    file_df = pd.DataFrame(columns=['name', 'extension', 'hash'])
-    for file in files_list:
-        docx_file = DocxHandler(file)
-        df_temp = pd.DataFrame(
-            {
-                'path': [file],
-                'name': [docx_file.file_path.stem],
-                'extension': [docx_file.file_path.suffix.split('.')[1]],
-                'hash': [docx_file.calculate_hash()]
-            }
-        )
-        file_df = pd.concat([file_df, df_temp], sort=False)
-    sql_df = dify.record_db.get_docx_file()
-    merged_hash_df = pd.merge(file_df, sql_df, on=['name', 'extension'], suffixes=('_file', '_sql'))
-    diff_hash_df = merged_hash_df[merged_hash_df['hash_file'] != merged_hash_df['hash_sql']]
-    merged_exist_df = file_df.merge(sql_df, on=['name', 'extension'], how='left', indicator=True,
-                                    suffixes=('_file', '_sql'))
-    not_in_sql_df = merged_exist_df[merged_exist_df['_merge'] == 'left_only']
-    final_df = pd.concat([diff_hash_df, not_in_sql_df], sort=False, ignore_index=True)
+    if files_list:
+        file_df = pd.DataFrame(columns=['name', 'extension', 'hash'])
+        for file in files_list:
+            docx_file = DocxHandler(file)
+            df_temp = pd.DataFrame(
+                {
+                    'path': [file],
+                    'name': [docx_file.file_path.stem],
+                    'extension': [docx_file.file_path.suffix.split('.')[1]],
+                    'hash': [docx_file.calculate_hash()]
+                }
+            )
+            file_df = pd.concat([file_df, df_temp], sort=False)
+        sql_df = dify.record_db.get_docx_file()
+        merged_hash_df = pd.merge(file_df, sql_df, on=['name', 'extension'], suffixes=('_file', '_sql'))
+        diff_hash_df = merged_hash_df[merged_hash_df['hash_file'] != merged_hash_df['hash_sql']]
+        merged_exist_df = file_df.merge(sql_df, on=['name', 'extension'], how='left', indicator=True,
+                                        suffixes=('_file', '_sql'))
+        not_in_sql_df = merged_exist_df[merged_exist_df['_merge'] == 'left_only']
+        final_df = pd.concat([diff_hash_df, not_in_sql_df], sort=False, ignore_index=True)
 
-    return final_df[['name', 'extension', 'path', 'hash_file']].rename(columns={'hash_file': 'hash'})
+        return final_df[['name', 'extension', 'path', 'hash_file']].rename(columns={'hash_file': 'hash'})
+    return pd.DataFrame()
 
 
 def main():
@@ -171,13 +173,18 @@ def main():
     dify = DifyPlatform(api_config=config.api_config('sandbox'))
     print('Getting valid files...')
     valid_files = get_valid_files(dify)
+    middle = datetime.datetime.now()
+    duration = (middle - start).total_seconds()
+    minutes = int(duration // 60)
+    seconds = int(duration % 60)
+    print(f"Cost time: {minutes} min {seconds} sec")
     print('Uploading files...')
     upload_files_to_dify(dify, valid_files)
     end = datetime.datetime.now()
-    duration = (end - start).total_seconds()
+    duration = (end - middle).total_seconds()
     minutes = int(duration // 60)
     seconds = int(duration % 60)
-    print(f"cost time: {minutes} min {seconds} sec")
+    print(f"Cost time: {minutes} min {seconds} sec")
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, TIMESTAMP, func, Uuid, VARCHAR, Text, Integer, Boolean, text
+from sqlalchemy import Column, TIMESTAMP, func, Uuid, VARCHAR, Text, Integer, Boolean, text, NVARCHAR
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -75,3 +75,12 @@ class DocxFiles(Base):
     created_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
     updated_by = Column(VARCHAR(255))
     updated_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
+
+
+class RpaCrudPInstrument(Base):
+    __tablename__ = 'rpa_crud_p_instrument'
+    __table_args__ = {'schema': 'rpa_curd'}
+
+    id = Column(Integer, primary_key=True)
+    url = Column(NVARCHAR(1255))
+    doc_path = Column(VARCHAR(255))
