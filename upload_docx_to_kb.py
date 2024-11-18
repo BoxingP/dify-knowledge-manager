@@ -1,10 +1,8 @@
 import base64
 import datetime
-import os
 import re
 
 import pandas as pd
-from docx import Document
 
 from src.database.crawl_database import CrawlDatabase
 from src.services.dify_platform import DifyPlatform
@@ -66,22 +64,18 @@ def upload_files_to_dify(dify, files):
 
         images_dict = {}
         if not docx_content.image.empty:
-            doc = Document()
-            for index, row in docx_content.image.iterrows():
+            image_paths = []
+            for _, row in docx_content.image.iterrows():
                 img_data = base64.b64decode(row['image_base64_string'])
-                img_file = config.image_dir_path / f"{str(row['image_id'])}.{str(row['image_name'])}.{str(row['image_type'])}"
-                with open(img_file, 'wb') as f:
+                img_path = config.image_dir_path / f"{docx_file.file_path.stem}.{str(row['image_id'])}.{str(row['image_name'])}.{str(row['image_type'])}"
+                with open(img_path, 'wb') as f:
                     f.write(img_data)
-                doc.add_picture(str(img_file))
-                os.remove(img_file)
-            word_file = config.word_dir_path / f"{docx_file.file_path.stem}.docx"
-            doc.save(word_file)
-            document_id = details_kb.create_document_by_file(word_file)
-            image_documents = details_kb.get_documents(source='api', document_id=document_id, with_segment=True,
-                                                       with_image=True)
-            images_dict = {str(index): f'\n![image](/files/{value}/file-preview)\n' for index, value in
-                           enumerate(image_documents['image'])}
-            details_kb.delete_document(document_id)
+                image_paths.append(img_path)
+            images_path_to_id = dify.upload_images_to_dify(image_paths, details_kb, docx_file.file_path.stem)
+            images_dict = {
+                str(index): f'\n![image](/files/{value}/file-preview)\n' for index, (key, value) in
+                enumerate(images_path_to_id.items())
+            }
 
         tables_dict = {}
         if not docx_content.table.empty:

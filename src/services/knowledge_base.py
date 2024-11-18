@@ -128,8 +128,9 @@ class KnowledgeBase(object):
         self.wait_document_embedding(batch_id, document_id)
         return document_id
 
-    def delete_document(self, document_id):
-        self.api.delete_document(self.dataset_id, document_id)
+    def delete_document(self, document_ids: list[str]):
+        for document_id in document_ids:
+            self.api.delete_document(self.dataset_id, document_id)
 
     def update_segment_in_document(self, segment):
         self.api.update_segment_in_document(self.dataset_id, segment['document_id'], segment['id'], segment['content'],
