@@ -119,13 +119,22 @@ def upload_files_to_dify(dify, files):
     dify.record_db.save_docx_file(files[['name', 'extension', 'hash']])
 
 
-def get_first_day_of_current_month() -> int:
-    first_day = config.initial_datetime.replace(day=1)
+def get_first_day_of_month(year: int = None, month: int = None) -> int:
+    if year is None:
+        year = config.initial_datetime.year
+    if month is None:
+        month = config.initial_datetime.month
+    first_day = datetime.datetime(year, month, 1)
     return int(first_day.strftime('%Y%m%d'))
 
 
-def get_valid_files(dify) -> pd.DataFrame:
-    documents = CrawlDatabase('crawl').get_documents(get_first_day_of_current_month())
+def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
+    if get_specific_documents:
+        documents = CrawlDatabase('crawl').get_documents(get_first_day_of_month())
+        include_files = documents['doc_name'].tolist()
+    else:
+        include_files = None
+
     wsd = WindowsShareFolder(
         config.share_folder['path'],
         config.share_folder['username'],
@@ -134,7 +143,7 @@ def get_valid_files(dify) -> pd.DataFrame:
     files_list = wsd.get_files_list(
         include_subfolders=False,
         file_type='docx',
-        include_files=documents['doc_name'].tolist(),
+        include_files=include_files,
         sort_alphabetical='desc'
     )
     if files_list:
@@ -166,7 +175,7 @@ def main():
     start = datetime.datetime.now()
     dify = DifyPlatform(api_config=config.api_config('sandbox'))
     print('Getting valid files...')
-    valid_files = get_valid_files(dify)
+    valid_files = get_valid_files(dify, get_specific_documents=True)
     middle = datetime.datetime.now()
     duration = (middle - start).total_seconds()
     minutes = int(duration // 60)
