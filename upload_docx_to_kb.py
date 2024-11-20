@@ -51,6 +51,16 @@ def extract_content_as_str(document_df, image_dict=None, table_dict=None) -> str
 
 
 def upload_files_to_dify(dify, files):
+    def get_first_non_empty_row(df, style: str):
+        filtered_rows = df[
+            (df['style'] == style) &
+            (df['text'].notna()) &
+            (df['text'].apply(lambda x: x.strip() != ''))
+            ]
+        if not filtered_rows.empty:
+            return filtered_rows.iloc[0]['text']
+        return None
+
     summary_kb = KnowledgeBase(dify.dataset_api, dify.get_dataset_id_by_name(config.summary_dataset),
                                config.summary_dataset, dify.record_db)
     details_kb = KnowledgeBase(dify.dataset_api, dify.get_dataset_id_by_name(config.details_dataset),
@@ -73,8 +83,9 @@ def upload_files_to_dify(dify, files):
                 image_paths.append(img_path)
             images_path_to_id = dify.upload_images_to_dify(image_paths, details_kb, docx_file.file_path.stem)
             images_dict = {
-                str(index): f'\n![image](/files/{value}/file-preview)\n' for index, (key, value) in
-                enumerate(images_path_to_id.items())
+                str(index): f'\n![image](/files/{value}/file-preview)\n'
+                for index, (key, value) in enumerate(images_path_to_id.items())
+                if value
             }
 
         tables_dict = {}
@@ -83,9 +94,13 @@ def upload_files_to_dify(dify, files):
                            docx_content.table[['table_id', 'table_string']].values}
         document_str = extract_content_as_str(document_df, images_dict, tables_dict)
         response = dify.analyze_content(document_str)
-        title = document_df[document_df['style'] == 'Title'].iloc[0]['text']
+        title = get_first_non_empty_row(document_df, 'Title')
+        if title is None:
+            title = get_first_non_empty_row(document_df, 'Normal')
+        if title is None:
+            title = ''
         release_date = extract_release_date(document_str)
-        document_name = f'{release_date}: {title}'
+        document_name = f'{release_date}: {title}' if release_date else title
 
         details_document = {
             'name': document_name,
@@ -175,7 +190,7 @@ def main():
     start = datetime.datetime.now()
     dify = DifyPlatform(api_config=config.api_config('sandbox'))
     print('Getting valid files...')
-    valid_files = get_valid_files(dify, get_specific_documents=True)
+    valid_files = get_valid_files(dify)
     middle = datetime.datetime.now()
     duration = (middle - start).total_seconds()
     minutes = int(duration // 60)

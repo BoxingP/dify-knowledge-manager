@@ -130,7 +130,8 @@ class KnowledgeBase(object):
 
     def delete_document(self, document_ids: list[str]):
         for document_id in document_ids:
-            self.api.delete_document(self.dataset_id, document_id)
+            if document_id:
+                self.api.delete_document(self.dataset_id, document_id)
 
     def update_segment_in_document(self, segment):
         self.api.update_segment_in_document(self.dataset_id, segment['document_id'], segment['id'], segment['content'],

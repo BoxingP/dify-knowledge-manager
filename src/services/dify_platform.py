@@ -1,5 +1,7 @@
 import json
+import random
 import re
+import time
 import uuid
 from pathlib import Path
 
@@ -85,25 +87,36 @@ class DifyPlatform(object):
             doc.add_paragraph()
         doc.save(word_file.as_posix())
 
-    def upload_images_as_word_documents(self, dataset, document_name, images, split_count=1, max_split_count=3) -> list:
-        if split_count > max_split_count:
+    def upload_images_as_word_documents(self, dataset, document_name, images, split_count=1,
+                                        current_split=1, max_split=5) -> list:
+        def split_list(lst, count):
+            k, m = divmod(len(lst), count)
+            return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(count)]
+
+        if current_split > max_split:
             raise SplitCountExceeded(
-                f'Max split count of {max_split_count} exceeded for document {document_name} in {dataset.dataset_id}')
+                f'Max split count of {max_split} exceeded for document {document_name} uploaded to {dataset.dataset_id}'
+            )
 
         uploaded_documents = []
-        split_image_paths = [images[i::split_count] for i in range(split_count)]
+        split_image_paths = split_list(images, split_count)
         for batch_index, image_batch in enumerate(split_image_paths):
-            word_file_path = config.word_dir_path / Path(f'{document_name}-{batch_index}.docx')
-            self.add_images_to_document(image_batch, word_file_path)
-            document_id = dataset.create_document_by_file(word_file_path)
-            if document_id is not None:
-                uploaded_documents.append(document_id)
-            else:
-                uploaded_documents.extend(
-                    self.upload_images_as_word_documents(
-                        dataset, document_name, image_batch, split_count * 2, max_split_count
-                    )
-                )
+            if image_batch:
+                word_file_path = config.word_dir_path / Path(f'{document_name}-{current_split}-{batch_index}.docx')
+                self.add_images_to_document(image_batch, word_file_path)
+                document_id = dataset.create_document_by_file(word_file_path)
+                if document_id is not None:
+                    uploaded_documents.append(document_id)
+                else:
+                    if len(image_batch) == 1:
+                        uploaded_documents.append('')
+                    else:
+                        uploaded_documents.extend(
+                            self.upload_images_as_word_documents(
+                                dataset, document_name, image_batch, split_count * 2, current_split + 1, max_split
+                            )
+                        )
+            time.sleep(random.uniform(1, 3))
         return uploaded_documents
 
     def upload_images_to_dify(self, images_path: list, dataset: KnowledgeBase, doc_name: str = uuid.uuid4()) -> dict:
@@ -112,8 +125,11 @@ class DifyPlatform(object):
         docs_with_images = self.upload_images_as_word_documents(dataset, doc_name, images_path)
         images = []
         for document_id in docs_with_images:
-            document = dataset.get_documents('api', document_id=document_id, with_segment=True, with_image=True)
-            images.extend(document['image'])
+            if document_id == '':
+                images.append('')
+            else:
+                document = dataset.get_documents('api', document_id=document_id, with_segment=True, with_image=True)
+                images.extend(document['image'])
         images_mapping.update(dict(zip(images_path, images)))
         dataset.delete_document(docs_with_images)
 
