@@ -1,7 +1,8 @@
 import pandas as pd
+from sqlalchemy import update
 
 from src.database.database import Database, database_session
-from src.database.model import Document, Dataset, DocumentSegment, DocxFiles
+from src.database.model import Document, Dataset, DocumentSegment, DocxFiles, AgentInfo
 
 
 class RecordDatabase(Database):
@@ -119,6 +120,49 @@ class RecordDatabase(Database):
                 DocxFiles.extension,
                 DocxFiles.hash
             )
+            df = pd.DataFrame.from_records(
+                query.all(),
+                columns=[column['name'] for column in query.column_descriptions]
+            )
+            return df
+
+    def save_agent_info(self, agent_info: pd.DataFrame):
+        table = AgentInfo
+        self.create_table_if_not_exists(table)
+        with database_session(self.session) as session:
+            query = session.query(table)
+            existing_agent_info = pd.DataFrame([record.__dict__ for record in query.all()])
+            if not existing_agent_info.empty:
+                existing_agent_info = existing_agent_info.drop('_sa_instance_state', axis=1)
+                merged_df = existing_agent_info.merge(
+                    agent_info[['id', 'language']], on=['id', 'language'], how='left', indicator=True
+                )
+                rows_to_remove = merged_df[merged_df['_merge'] == 'left_only']
+                if not rows_to_remove.empty:
+                    session.execute(
+                        update(table)
+                        .where(table.id.in_(rows_to_remove['id']), table.language.in_(rows_to_remove['language']))
+                        .values(is_remove=True)
+                    )
+                    session.commit()
+            agent_info['is_remove'] = False
+            self.update_or_insert_data(agent_info, table)
+
+    def get_agent_info(self) -> pd.DataFrame:
+        with database_session(self.session) as session:
+            query = session.query(
+                AgentInfo.id.label('abid'),
+                AgentInfo.name,
+                AgentInfo.country,
+                AgentInfo.category,
+                AgentInfo.language,
+                AgentInfo.description,
+                AgentInfo.remark
+            ).filter(
+                AgentInfo.is_active == True,
+                AgentInfo.is_remove == False
+            )
+
             df = pd.DataFrame.from_records(
                 query.all(),
                 columns=[column['name'] for column in query.column_descriptions]

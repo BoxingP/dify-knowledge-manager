@@ -1,4 +1,5 @@
-from sqlalchemy import Column, TIMESTAMP, func, Uuid, VARCHAR, Text, Integer, Boolean, text, NVARCHAR
+from sqlalchemy import Column, TIMESTAMP, func, Uuid, VARCHAR, Text, Integer, Boolean, text, NVARCHAR, Unicode
+from sqlalchemy.dialects.mssql import BIT
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -84,3 +85,51 @@ class RpaCrudPInstrument(Base):
     id = Column(Integer, primary_key=True)
     url = Column(NVARCHAR(1255))
     doc_path = Column(VARCHAR(255))
+
+
+class Agent(Base):
+    __tablename__ = 'agent'
+    __table_args__ = {'schema': 'dbo'}
+
+    abid = Column(Integer, primary_key=True)
+    name = Column(NVARCHAR(50))
+    description = Column(NVARCHAR(150))
+    is_active = Column(BIT)
+    category_id = Column(Integer)
+    country_code = Column(NVARCHAR(2))
+
+
+class AgentLanguage(Base):
+    __tablename__ = 'agent_language'
+    __table_args__ = {'schema': 'dbo'}
+
+    abid = Column(Integer, primary_key=True)
+    lang_code = Column(NVARCHAR(5), primary_key=True)
+    name = Column(NVARCHAR(50))
+    description = Column(NVARCHAR(250))
+
+
+class Category(Base):
+    __tablename__ = 'category'
+    __table_args__ = {'schema': 'dbo'}
+
+    category_id = Column(Integer, primary_key=True)
+    category_name = Column(NVARCHAR(20), primary_key=True)
+
+
+class AgentInfo(Base):
+    __tablename__ = 'agent_info'
+
+    id = Column(Unicode(6), primary_key=True)
+    name = Column(Unicode(50))
+    country = Column(Unicode(20))
+    category = Column(Unicode(20))
+    language = Column(Unicode(10), primary_key=True)
+    description = Column(Text)
+    remark = Column(Text)
+    is_active = Column(Boolean)
+    is_remove = Column(Boolean)
+    created_by = Column(VARCHAR(255))
+    created_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
+    updated_by = Column(VARCHAR(255))
+    updated_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
