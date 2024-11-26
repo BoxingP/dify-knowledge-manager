@@ -175,14 +175,21 @@ def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
             )
             file_df = pd.concat([file_df, df_temp], sort=False)
         sql_df = dify.record_db.get_docx_file()
-        merged_hash_df = pd.merge(file_df, sql_df, on=['name', 'extension'], suffixes=('_file', '_sql'))
-        diff_hash_df = merged_hash_df[merged_hash_df['hash_file'] != merged_hash_df['hash_sql']]
-        merged_exist_df = file_df.merge(sql_df, on=['name', 'extension'], how='left', indicator=True,
-                                        suffixes=('_file', '_sql'))
-        not_in_sql_df = merged_exist_df[merged_exist_df['_merge'] == 'left_only']
+        if sql_df.empty:
+            diff_hash_df = pd.DataFrame(columns=file_df.columns)
+            not_in_sql_df = file_df.copy()
+        else:
+            merged_hash_df = pd.merge(file_df, sql_df, on=['name', 'extension'], suffixes=('_file', '_sql'))
+            diff_hash_df = merged_hash_df[merged_hash_df['hash_file'] != merged_hash_df['hash_sql']]
+            merged_exist_df = file_df.merge(sql_df, on=['name', 'extension'], how='left', indicator=True,
+                                            suffixes=('_file', '_sql'))
+            not_in_sql_df = merged_exist_df[merged_exist_df['_merge'] == 'left_only']
         final_df = pd.concat([diff_hash_df, not_in_sql_df], sort=False, ignore_index=True)
 
-        return final_df[['name', 'extension', 'path', 'hash_file']].rename(columns={'hash_file': 'hash'})
+        if 'hash_file' in final_df.columns:
+            return final_df[['name', 'extension', 'path', 'hash_file']].rename(columns={'hash_file': 'hash'})
+        else:
+            return final_df[['name', 'extension', 'path', 'hash']]
     return pd.DataFrame()
 
 
@@ -191,6 +198,7 @@ def main():
     dify = DifyPlatform(api_config=config.api_config('sandbox'))
     print('Getting valid files...')
     valid_files = get_valid_files(dify)
+    print(f'{len(valid_files)} valid files')
     middle = datetime.datetime.now()
     duration = (middle - start).total_seconds()
     minutes = int(duration // 60)

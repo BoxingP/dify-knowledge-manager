@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy import update
+from sqlalchemy.exc import ProgrammingError
 
 from src.database.database import Database, database_session
 from src.database.model import Document, Dataset, DocumentSegment, DocxFiles, AgentInfo
@@ -115,16 +116,23 @@ class RecordDatabase(Database):
 
     def get_docx_file(self):
         with database_session(self.session) as session:
-            query = session.query(
-                DocxFiles.name,
-                DocxFiles.extension,
-                DocxFiles.hash
-            )
-            df = pd.DataFrame.from_records(
-                query.all(),
-                columns=[column['name'] for column in query.column_descriptions]
-            )
-            return df
+            try:
+                query = session.query(
+                    DocxFiles.name,
+                    DocxFiles.extension,
+                    DocxFiles.hash
+                )
+                df = pd.DataFrame.from_records(
+                    query.all(),
+                    columns=[column['name'] for column in query.column_descriptions]
+                )
+                return df
+            except ProgrammingError as e:
+                if f'relation "{DocxFiles.__tablename__}" does not exist' in str(e):
+                    print(f'Table "{DocxFiles.__tablename__}" does not exist. Returning an empty dataframe.')
+                    return pd.DataFrame(columns=['name', 'extension', 'hash'])
+                else:
+                    raise e
 
     def save_agent_info(self, agent_info: pd.DataFrame):
         table = AgentInfo
