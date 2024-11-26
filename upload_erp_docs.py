@@ -1,7 +1,6 @@
 import datetime
 
 from src.services.dify_platform import DifyPlatform
-from src.services.knowledge_base import KnowledgeBase
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
 
@@ -45,7 +44,7 @@ def get_data_list(segment_size: int = None):
 def upload_data_list(data_list):
     upload_dify = DifyPlatform(api_config=config.api_config('dev'))
     kb_name = config.erp_dataset
-    kb = KnowledgeBase(upload_dify.dataset_api, upload_dify.get_dataset_id_by_name(kb_name), kb_name, upload_dify.record_db)
+    kb = upload_dify.init_knowledge_base(kb_name)
     kb.add_document(data_list)
 
 

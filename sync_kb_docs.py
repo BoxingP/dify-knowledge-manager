@@ -1,17 +1,11 @@
 from src.services.dify_platform import DifyPlatform
-from src.services.knowledge_base import KnowledgeBase
 from src.utils.config import config
 
 
 def get_documents_from_source_knowledge_base(source_dify):
     for kb_mapping in config.mapping:
         kb_name = kb_mapping['source']
-        kb = KnowledgeBase(
-            source_dify.dataset_api,
-            source_dify.get_dataset_id_by_name(kb_name),
-            kb_name,
-            source_dify.record_db
-        )
+        kb = source_dify.init_knowledge_base(kb_name)
         kb.save_knowledge_base_info_to_db()
         documents = kb.get_documents(source='api', with_segment=True)
         kb.sync_documents_to_db(documents)
@@ -21,18 +15,8 @@ def sync_documents_to_target_knowledge_base(source_dify, target_dify):
     for kb_mapping in config.mapping:
         source_kb_name = kb_mapping['source']
         target_kb_name = kb_mapping['target']
-        source_kb = KnowledgeBase(
-            source_dify.dataset_api,
-            source_dify.get_dataset_id_by_name(source_kb_name),
-            source_kb_name,
-            source_dify.record_db
-        )
-        target_kb = KnowledgeBase(
-            target_dify.dataset_api,
-            target_dify.get_dataset_id_by_name(target_kb_name),
-            target_kb_name,
-            target_dify.record_db
-        )
+        source_kb = source_dify.init_knowledge_base(source_kb_name)
+        target_kb = target_dify.init_knowledge_base(target_kb_name)
         source_documents = source_kb.get_documents(source='db', with_segment=True)
         target_kb.add_document(source_documents, sort_document=True)
 
@@ -41,18 +25,8 @@ def replace_images_in_target_knowledge_base_documents(source_dify, target_dify):
     for kb_mapping in config.mapping:
         source_kb_name = kb_mapping['source']
         target_kb_name = kb_mapping['target']
-        source_kb = KnowledgeBase(
-            source_dify.dataset_api,
-            source_dify.get_dataset_id_by_name(source_kb_name),
-            source_kb_name,
-            source_dify.record_db
-        )
-        target_kb = KnowledgeBase(
-            target_dify.dataset_api,
-            target_dify.get_dataset_id_by_name(target_kb_name),
-            target_kb_name,
-            target_dify.record_db
-        )
+        source_kb = source_dify.init_knowledge_base(source_kb_name)
+        target_kb = target_dify.init_knowledge_base(target_kb_name)
         source_docs = source_kb.get_documents(source='db', with_segment=True, with_image=True)
         source_docs_with_images = list(filter(lambda item: item['image'], source_docs))
         if source_docs_with_images:

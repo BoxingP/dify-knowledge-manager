@@ -153,3 +153,7 @@ class DifyPlatform(object):
         except json.JSONDecodeError:
             answer = {}
         return answer
+
+    def init_knowledge_base(self, dataset_name):
+        dataset_id = self.get_dataset_id_by_name(dataset_name)
+        return KnowledgeBase(self.dataset_api, dataset_id, dataset_name, self.record_db)
