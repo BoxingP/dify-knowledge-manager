@@ -3,7 +3,11 @@ from sqlalchemy import update
 from sqlalchemy.exc import ProgrammingError
 
 from src.database.database import Database, database_session
-from src.database.model import Document, Dataset, DocumentSegment, DocxFiles, AgentInfo
+from src.models.record_database.agents import Agents
+from src.models.record_database.datasets import Datasets
+from src.models.record_database.document_segments import DocumentSegments
+from src.models.record_database.documents import Documents
+from src.models.record_database.docx_files import DocxFiles
 
 
 class RecordDatabase(Database):
@@ -11,103 +15,121 @@ class RecordDatabase(Database):
         super(RecordDatabase, self).__init__(database_name)
 
     def save_knowledge_base_info(self, knowledge_base: dict):
-        table = Dataset
+        table = Datasets
         self.create_table_if_not_exists(table)
         self.update_or_insert_data(pd.DataFrame.from_records([knowledge_base]), table)
 
     def save_documents(self, documents: list):
-        table = Document
+        table = Documents
         self.create_table_if_not_exists(table)
         self.update_or_insert_data(pd.DataFrame(documents), table)
 
     def remove_documents(self, document_ids: list):
         with database_session(self.session) as session:
-            session.query(DocumentSegment) \
-                .filter(DocumentSegment.document_id.in_(document_ids)).delete(synchronize_session='fetch')
-            session.query(Document) \
-                .filter(Document.id.in_(document_ids)).delete(synchronize_session='fetch')
+            session.query(DocumentSegments) \
+                .filter(DocumentSegments.document_id.in_(document_ids)).delete(synchronize_session='fetch')
+            session.query(Documents) \
+                .filter(Documents.id.in_(document_ids)).delete(synchronize_session='fetch')
             session.commit()
 
     def save_segments(self, segments: list):
-        table = DocumentSegment
+        table = DocumentSegments
         self.create_table_if_not_exists(table)
         self.update_or_insert_data(pd.DataFrame(segments), table)
 
     def remove_segments(self, document_id, segment_ids=None):
         with database_session(self.session) as session:
             if segment_ids is None:
-                stmt = session.query(DocumentSegment) \
-                    .filter(DocumentSegment.document_id == document_id)
+                stmt = session.query(DocumentSegments) \
+                    .filter(DocumentSegments.document_id == document_id)
             else:
-                stmt = session.query(DocumentSegment) \
-                    .filter(DocumentSegment.document_id == document_id, DocumentSegment.id.in_(segment_ids))
+                stmt = session.query(DocumentSegments) \
+                    .filter(DocumentSegments.document_id == document_id, DocumentSegments.id.in_(segment_ids))
             stmt.delete(synchronize_session='fetch')
             session.commit()
 
     def get_documents(self, url: str, dataset_id: str, with_segment=False) -> list:
-        with database_session(self.session) as session:
-            query = session.query(
-                Document.id.label('document_id'),
-                Document.position.label('document_position'),
-                Document.name,
-                Dataset.id.label('dataset_id'),
-                DocumentSegment.id.label('segment_id'),
-                DocumentSegment.position,
-                DocumentSegment.content,
-                DocumentSegment.answer,
-                DocumentSegment.keywords
-            ).outerjoin(
-                Document, DocumentSegment.document_id == Document.id
-            ).outerjoin(
-                Dataset, Dataset.id == Document.dataset_id
-            ).filter(
-                Dataset.url == url, Dataset.id == dataset_id
-            )
-            results = query.all()
-        records = {}
-        for result in results:
-            record = records.get(result.document_id)
-            if record is None:
-                record = {
-                    'id': str(result.document_id),
-                    'position': result.document_position,
-                    'name': result.name,
-                    'dataset_id': str(result.dataset_id)
-                }
+        try:
+            with database_session(self.session) as session:
+                query = session.query(
+                    Documents.id.label('document_id'),
+                    Documents.position.label('document_position'),
+                    Documents.name,
+                    Datasets.id.label('dataset_id'),
+                    DocumentSegments.id.label('segment_id'),
+                    DocumentSegments.position,
+                    DocumentSegments.content,
+                    DocumentSegments.answer,
+                    DocumentSegments.keywords
+                ).outerjoin(
+                    Documents, DocumentSegments.document_id == Documents.id
+                ).outerjoin(
+                    Datasets, Datasets.id == Documents.dataset_id
+                ).filter(
+                    Datasets.url == url, Datasets.id == dataset_id
+                )
+                results = query.all()
+            records = {}
+            for result in results:
+                record = records.get(result.document_id)
+                if record is None:
+                    record = {
+                        'id': str(result.document_id),
+                        'position': result.document_position,
+                        'name': result.name,
+                        'dataset_id': str(result.dataset_id)
+                    }
+                    if with_segment:
+                        record['segment'] = []
+                    records[result.document_id] = record
                 if with_segment:
-                    record['segment'] = []
-                records[result.document_id] = record
-            if with_segment:
-                segment = {
-                    'id': str(result.segment_id),
-                    'position': result.position,
-                    'document_id': str(result.document_id),
-                    'content': result.content,
-                    'answer': result.answer,
-                    'keywords': result.keywords.split(',')
-                }
-                record['segment'].append(segment)
+                    segment = {
+                        'id': str(result.segment_id),
+                        'position': result.position,
+                        'document_id': str(result.document_id),
+                        'content': result.content,
+                        'answer': result.answer,
+                        'keywords': result.keywords.split(',')
+                    }
+                    record['segment'].append(segment)
 
-        return list(records.values())
+            return list(records.values())
+        except ProgrammingError as e:
+            if f'relation "{Documents.__tablename__}" does not exist' in str(e):
+                print(f'Table "{Documents.__tablename__}" does not exist. Returning an empty list.')
+                return []
+            elif f'relation "{DocumentSegments.__tablename__}" does not exist' in str(e):
+                print(f'Table "{DocumentSegments.__tablename__}" does not exist. Returning an empty list.')
+                return []
+            else:
+                raise e
 
     def get_segments(self, document_id):
         with database_session(self.session) as session:
-            query = session.query(
-                DocumentSegment.id,
-                DocumentSegment.position,
-                DocumentSegment.document_id,
-                DocumentSegment.content,
-                DocumentSegment.answer,
-                DocumentSegment.keywords
-            ).filter(
-                DocumentSegment.document_id == document_id
-            )
-            results = query.all()
-            keys = [column['name'] for column in query.column_descriptions]
-            segments = [{**{
-                key: str(value) if key in ['id', 'document_id'] else value.split(", ") if key == 'keywords' else value
-                for key, value in dict(zip(keys, result)).items()}} for result in results]
-            return segments
+            try:
+                query = session.query(
+                    DocumentSegments.id,
+                    DocumentSegments.position,
+                    DocumentSegments.document_id,
+                    DocumentSegments.content,
+                    DocumentSegments.answer,
+                    DocumentSegments.keywords
+                ).filter(
+                    DocumentSegments.document_id == document_id
+                )
+                results = query.all()
+                keys = [column['name'] for column in query.column_descriptions]
+                segments = [{**{
+                    key: str(value) if key in ['id', 'document_id'] else value.split(
+                        ", ") if key == 'keywords' else value
+                    for key, value in dict(zip(keys, result)).items()}} for result in results]
+                return segments
+            except ProgrammingError as e:
+                if f'relation "{DocumentSegments.__tablename__}" does not exist' in str(e):
+                    print(f'Table "{DocumentSegments.__tablename__}" does not exist. Returning an empty list.')
+                    return []
+                else:
+                    raise e
 
     def save_docx_file(self, docx_file: pd.DataFrame):
         table = DocxFiles
@@ -135,7 +157,7 @@ class RecordDatabase(Database):
                     raise e
 
     def save_agent_info(self, agent_info: pd.DataFrame):
-        table = AgentInfo
+        table = Agents
         self.create_table_if_not_exists(table)
         with database_session(self.session) as session:
             query = session.query(table)
@@ -159,16 +181,16 @@ class RecordDatabase(Database):
     def get_agent_info(self) -> pd.DataFrame:
         with database_session(self.session) as session:
             query = session.query(
-                AgentInfo.id.label('abid'),
-                AgentInfo.name,
-                AgentInfo.country,
-                AgentInfo.category,
-                AgentInfo.language,
-                AgentInfo.description,
-                AgentInfo.remark
+                Agents.id.label('abid'),
+                Agents.name,
+                Agents.country,
+                Agents.category,
+                Agents.language,
+                Agents.description,
+                Agents.remark
             ).filter(
-                AgentInfo.is_active == True,
-                AgentInfo.is_remove == False
+                Agents.is_active == True,
+                Agents.is_remove == False
             )
 
             df = pd.DataFrame.from_records(

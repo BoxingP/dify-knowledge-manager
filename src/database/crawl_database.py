@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import case, cast, func, Integer
 
 from src.database.database import Database, database_session
-from src.database.model import RpaCrudPInstrument
+from src.models.crawl_database.rpa_crud_p_instrument import RpaCrudPInstrument
 
 
 class CrawlDatabase(Database):

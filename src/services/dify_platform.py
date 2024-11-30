@@ -48,9 +48,7 @@ class DifyPlatform(object):
 
     @property
     def dify_db(self):
-        if self._dify_db is None:
-            if self._dify_db_name is None:
-                raise Exception("'dify_db_name' is not set, provide valid 'dify_db_name'")
+        if self._dify_db is None and self._dify_db_name is not None:
             self._dify_db = DifyDatabase(self._dify_db_name)
         return self._dify_db
 
@@ -63,6 +61,8 @@ class DifyPlatform(object):
         return dataset_id
 
     def download_images_to_local(self, image_uuids: list):
+        if self.dify_db is None:
+            raise Exception('Dify database is not set')
         image_paths = {}
         for uuid in image_uuids:
             image_path_in_dify = self.dify_db.get_image_path(uuid)
@@ -128,7 +128,7 @@ class DifyPlatform(object):
             if document_id == '':
                 images.append('')
             else:
-                document = dataset.get_documents('api', document_id=document_id, with_segment=True, with_image=True)
+                document = dataset.fetch_documents('api', document_id=document_id, with_segment=True, with_image=True)
                 images.extend(document['image'])
         images_mapping.update(dict(zip(images_path, images)))
         dataset.delete_document(docs_with_images)
@@ -156,4 +156,4 @@ class DifyPlatform(object):
 
     def init_knowledge_base(self, dataset_name):
         dataset_id = self.get_dataset_id_by_name(dataset_name)
-        return KnowledgeBase(self.dataset_api, dataset_id, dataset_name, self.record_db)
+        return KnowledgeBase(dataset_id, dataset_name, self.dataset_api, self.dify_db, self.record_db)

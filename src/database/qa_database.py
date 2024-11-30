@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.database.database import Database, database_session
-from src.database.model import QaKnowledge
+from src.models.qa_database.qa_knowledge import QaKnowledge
 
 
 class QaDatabase(Database):

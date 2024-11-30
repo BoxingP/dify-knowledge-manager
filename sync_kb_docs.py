@@ -6,9 +6,9 @@ def get_documents_from_source_knowledge_base(source_dify):
     for kb_mapping in config.mapping:
         kb_name = kb_mapping['source']
         kb = source_dify.init_knowledge_base(kb_name)
-        kb.save_knowledge_base_info_to_db()
-        documents = kb.get_documents(source='api', with_segment=True)
-        kb.sync_documents_to_db(documents)
+        kb.record_knowledge_base_info()
+        documents = kb.fetch_documents(source='api', with_segment=True)
+        kb.record_documents(documents)
 
 
 def sync_documents_to_target_knowledge_base(source_dify, target_dify):
@@ -17,7 +17,7 @@ def sync_documents_to_target_knowledge_base(source_dify, target_dify):
         target_kb_name = kb_mapping['target']
         source_kb = source_dify.init_knowledge_base(source_kb_name)
         target_kb = target_dify.init_knowledge_base(target_kb_name)
-        source_documents = source_kb.get_documents(source='db', with_segment=True)
+        source_documents = source_kb.fetch_documents(source='record', with_segment=True)
         target_kb.add_document(source_documents, sort_document=True)
 
 
@@ -27,7 +27,7 @@ def replace_images_in_target_knowledge_base_documents(source_dify, target_dify):
         target_kb_name = kb_mapping['target']
         source_kb = source_dify.init_knowledge_base(source_kb_name)
         target_kb = target_dify.init_knowledge_base(target_kb_name)
-        source_docs = source_kb.get_documents(source='db', with_segment=True, with_image=True)
+        source_docs = source_kb.fetch_documents(source='db', with_segment=True, with_image=True)
         source_docs_with_images = list(filter(lambda item: item['image'], source_docs))
         if source_docs_with_images:
 
@@ -44,7 +44,7 @@ def replace_images_in_target_knowledge_base_documents(source_dify, target_dify):
                 target_images.update(images_path_to_id)
             images_mapping = {k: target_images[v] for k, v in local_images.items()}
 
-            target_documents = target_kb.get_documents(source='api', with_segment=True)
+            target_documents = target_kb.fetch_documents(source='api', with_segment=True)
             for document in target_documents:
                 for segment in document['segment']:
                     origin_segment_content = segment['content']
@@ -60,7 +60,7 @@ def main():
         s3_config=config.s3_config('prod'),
         dify_db_name='prod'
     )
-    target_dify = DifyPlatform(api_config=config.api_config('dev'))
+    target_dify = DifyPlatform(api_config=config.api_config('sandbox'))
     get_documents_from_source_knowledge_base(source_dify)
     sync_documents_to_target_knowledge_base(source_dify, target_dify)
     replace_images_in_target_knowledge_base_documents(source_dify, target_dify)

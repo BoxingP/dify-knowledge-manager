@@ -3,7 +3,9 @@ from sqlalchemy import literal
 from sqlalchemy.orm import aliased
 
 from src.database.database import Database, database_session
-from src.database.model import Agent, AgentLanguage, Category
+from src.models.ab_database.agent import Agent
+from src.models.ab_database.agent_language import AgentLanguage
+from src.models.ab_database.category import Category
 
 
 class AbDatabase(Database):
