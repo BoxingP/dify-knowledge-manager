@@ -3,6 +3,7 @@ import datetime
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
+from src.utils.time_utils import timing
 
 
 def create_data_dict(name, segment_list):
@@ -41,6 +42,7 @@ def get_data_list(segment_size: int = None):
     return data_list
 
 
+@timing
 def upload_data_list(data_list):
     upload_dify = DifyPlatform(api_config=config.api_config('dev'))
     kb_name = config.erp_dataset
@@ -51,13 +53,7 @@ def upload_data_list(data_list):
 def main():
     data_list = get_data_list()
     print('Data length:', len(data_list))
-    start = datetime.datetime.now()
     upload_data_list(data_list)
-    end = datetime.datetime.now()
-    duration = (end - start).total_seconds()
-    minutes = int(duration // 60)
-    seconds = int(duration % 60)
-    print(f"cost time: {minutes} min {seconds} sec")
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ from queue import Queue
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 from src.utils.excel_handler import ExcelHandler
+from src.utils.time_utils import timing
 
 
 def create_row_string(row):
@@ -69,6 +70,7 @@ def worker(kb, queue):
             queue.put(customer_chunk)
 
 
+@timing
 def upload_data_list_multithread(customer_data, num_threads):
     upload_dify = DifyPlatform(api_config=config.api_config('dev'))
     kb_name = config.upload_dataset
@@ -89,13 +91,7 @@ def upload_data_list_multithread(customer_data, num_threads):
 def main():
     data_list = get_data_list(segment_size=1)
     print('Data length:', len(data_list))
-    start = datetime.datetime.now()
     upload_data_list_multithread(data_list, num_threads=3)
-    end = datetime.datetime.now()
-    duration = (end - start).total_seconds()
-    minutes = int(duration // 60)
-    seconds = int(duration % 60)
-    print(f"cost time: {minutes} min {seconds} sec")
 
 
 if __name__ == '__main__':

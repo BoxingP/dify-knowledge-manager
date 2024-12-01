@@ -9,6 +9,7 @@ from src.services.dify_platform import DifyPlatform
 from src.services.windows_share_folder import WindowsShareFolder
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
+from src.utils.time_utils import timing
 
 
 def extract_origin_link(text: str) -> str:
@@ -152,6 +153,7 @@ def process_file(dify, file, summary_kb, details_kb):
     save_docx_file(dify, file)
 
 
+@timing
 def upload_files_to_dify(dify, files):
     if files.empty:
         return
@@ -172,6 +174,7 @@ def get_first_day_of_month(year: int = None, month: int = None) -> int:
     return int(first_day.strftime('%Y%m%d'))
 
 
+@timing
 def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
     if get_specific_documents:
         documents = CrawlDatabase('crawl').get_documents(get_first_day_of_month())
@@ -223,23 +226,12 @@ def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
 
 
 def main():
-    start = datetime.datetime.now()
     dify = DifyPlatform(api_config=config.api_config('sandbox'))
     print('Getting valid files...')
     valid_files = get_valid_files(dify)
     print(f'{len(valid_files)} valid files')
-    middle = datetime.datetime.now()
-    duration = (middle - start).total_seconds()
-    minutes = int(duration // 60)
-    seconds = int(duration % 60)
-    print(f"Cost time: {minutes} min {seconds} sec")
     print('Uploading files...')
     upload_files_to_dify(dify, valid_files)
-    end = datetime.datetime.now()
-    duration = (end - middle).total_seconds()
-    minutes = int(duration // 60)
-    seconds = int(duration % 60)
-    print(f"Cost time: {minutes} min {seconds} sec")
 
 
 if __name__ == '__main__':

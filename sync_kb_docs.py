@@ -1,7 +1,9 @@
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
+from src.utils.time_utils import timing
 
 
+@timing
 def get_documents_from_source_knowledge_base(source_dify):
     for kb_mapping in config.mapping:
         kb_name = kb_mapping['source']
@@ -11,6 +13,7 @@ def get_documents_from_source_knowledge_base(source_dify):
         kb.record_documents(documents)
 
 
+@timing
 def sync_documents_to_target_knowledge_base(source_dify, target_dify):
     for kb_mapping in config.mapping:
         source_kb_name = kb_mapping['source']
@@ -21,6 +24,7 @@ def sync_documents_to_target_knowledge_base(source_dify, target_dify):
         target_kb.add_document(source_documents, sort_document=True)
 
 
+@timing
 def replace_images_in_target_knowledge_base_documents(source_dify, target_dify):
     for kb_mapping in config.mapping:
         source_kb_name = kb_mapping['source']
