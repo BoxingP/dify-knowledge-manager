@@ -4,33 +4,22 @@ from src.utils.time_utils import timing
 
 
 @timing
-def get_documents_from_source_knowledge_base(source_dify):
+def sync_documents_to_target_knowledge_base(source_dify, target_dify, record_documents=True):
     for kb_mapping in config.mapping:
-        kb_name = kb_mapping['source']
-        kb = source_dify.init_knowledge_base(kb_name)
-        kb.record_knowledge_base_info()
-        documents = kb.fetch_documents(source='api', with_segment=True)
-        kb.record_documents(documents)
-
-
-@timing
-def sync_documents_to_target_knowledge_base(source_dify, target_dify):
-    for kb_mapping in config.mapping:
-        source_kb_name = kb_mapping['source']
-        target_kb_name = kb_mapping['target']
-        source_kb = source_dify.init_knowledge_base(source_kb_name)
-        target_kb = target_dify.init_knowledge_base(target_kb_name)
-        source_documents = source_kb.fetch_documents(source='record', with_segment=True)
+        source_kb = source_dify.init_knowledge_base(kb_mapping['source'])
+        target_kb = target_dify.init_knowledge_base(kb_mapping['target'])
+        source_documents = source_kb.fetch_documents(source='api', with_segment=True)
         target_kb.add_document(source_documents, sort_document=True)
+        if record_documents:
+            target_kb.record_knowledge_base_info()
+            target_kb.record_documents(source_documents)
 
 
 @timing
 def replace_images_in_target_knowledge_base_documents(source_dify, target_dify):
     for kb_mapping in config.mapping:
-        source_kb_name = kb_mapping['source']
-        target_kb_name = kb_mapping['target']
-        source_kb = source_dify.init_knowledge_base(source_kb_name)
-        target_kb = target_dify.init_knowledge_base(target_kb_name)
+        source_kb = source_dify.init_knowledge_base(kb_mapping['source'])
+        target_kb = target_dify.init_knowledge_base(kb_mapping['target'])
         source_docs = source_kb.fetch_documents(source='db', with_segment=True, with_image=True)
         source_docs_with_images = list(filter(lambda item: item['image'], source_docs))
         if source_docs_with_images:
@@ -65,7 +54,6 @@ def main():
         dify_db_name='prod'
     )
     target_dify = DifyPlatform(api_config=config.api_config('sandbox'))
-    get_documents_from_source_knowledge_base(source_dify)
     sync_documents_to_target_knowledge_base(source_dify, target_dify)
     replace_images_in_target_knowledge_base_documents(source_dify, target_dify)
 

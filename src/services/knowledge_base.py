@@ -34,7 +34,11 @@ class KnowledgeBase(object):
                                         doc['id'] not in [document['id'] for document in documents]]
             if docs_to_remove_in_record:
                 self.record_db.remove_documents([doc['id'] for doc in docs_to_remove_in_record])
-        self.record_db.save_documents([{k: v for k, v in document.items() if k != 'segment'} for document in documents])
+        modified_documents = [
+            {k: (self.dataset_id if k == 'dataset_id' else v) for k, v in document.items() if k != 'segment'}
+            for document in documents
+        ]
+        self.record_db.save_documents(modified_documents)
         for document in documents:
             segment_ids = [segment['id'] for segment in document['segment']]
             segment_ids_in_record = [segment['id'] for segment in self._fetch_segments('record', document['id'])]
