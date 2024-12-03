@@ -20,7 +20,7 @@ class Database(object):
 
     def __init__(self, database_name: str):
         self.database_name = database_name
-        self.db_uri = config.init_db_uri(database_name)
+        self.db_uri = config.get_db_uri(database_name)
         self.engine = self._create_engine()
         self.session = self._create_session()
 

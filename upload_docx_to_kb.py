@@ -144,7 +144,7 @@ def process_file(dify, file, summary_kb, details_kb):
     tables_dict = process_tables(docx_content.table)
 
     document_str = extract_content_as_str(document_df, images_dict, tables_dict)
-    response = dify.analyze_content(document_str)
+    response = dify.analyze_content(dify.summary_api, document_str)
     document_name, release_date = extract_document_info(document_df, document_str)
 
     details_document_id = add_document_to_kb(details_kb, document_name, document_str, response)
@@ -183,9 +183,9 @@ def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
         include_files = None
 
     wsd = WindowsShareFolder(
-        config.share_folder['path'],
-        config.share_folder['username'],
-        config.share_folder['password']
+        config.share_folder.path,
+        config.share_folder.username,
+        config.share_folder.password
     )
     files_list = wsd.get_files_list(
         include_subfolders=False,
@@ -226,7 +226,7 @@ def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
 
 
 def main():
-    dify = DifyPlatform(api_config=config.api_config('sandbox'))
+    dify = DifyPlatform('sandbox', apps=['summary'])
     print('Getting valid files...')
     valid_files = get_valid_files(dify)
     print(f'{len(valid_files)} valid files')

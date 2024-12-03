@@ -1,10 +1,11 @@
 ---
-path:
+paths:
   root_dir: /,tmp,dify
-  image_dir: assets,image_files
-  word_dir: assets,word_files
-  convert_dir: assets,image_files,converted
-  upload_dir: upload
+  sub_dirs:
+    image_dir: assets,image_files
+    word_dir: assets,word_files
+    convert_dir: assets,image_files,converted
+    upload_dir: upload
 sync:
   mapping:
     - source:

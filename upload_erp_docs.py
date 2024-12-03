@@ -1,5 +1,3 @@
-import datetime
-
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
@@ -44,7 +42,7 @@ def get_data_list(segment_size: int = None):
 
 @timing
 def upload_data_list(data_list):
-    upload_dify = DifyPlatform(api_config=config.api_config('dev'))
+    upload_dify = DifyPlatform('dev')
     kb_name = config.erp_dataset
     kb = upload_dify.init_knowledge_base(kb_name)
     kb.add_document(data_list)

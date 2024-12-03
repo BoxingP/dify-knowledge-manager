@@ -23,33 +23,35 @@ class SplitCountExceeded(Exception):
 
 
 class DifyPlatform(object):
-    def __init__(self, api_config, record_db_name: str = 'record', s3_config=None, dify_db_name: str = None):
-        self.app_api = AppApi(api_config.url, api_config.app_token)
-        self.dataset_api = DatasetApi(api_config.url, api_config.dataset_token)
+    def __init__(self, env: str, apps: list = None):
+        self.env = env.upper()
+        self.api_config = config.get_api_config(self.env, apps)
+        if apps is not None:
+            for app in apps:
+                app_token = getattr(self.api_config, f'{app}_app_token')
+                setattr(self, f'{app}_api', AppApi(self.api_config.url, app_token))
+        self.dataset_api = DatasetApi(self.api_config.url, self.api_config.dataset_token)
         self.datasets = self.dataset_api.get_datasets()
-        self.record_db = RecordDatabase(record_db_name)
-        self._s3_config = s3_config
+        self.record_db = RecordDatabase('record')
         self._s3 = None
-        self._dify_db_name = dify_db_name
         self._dify_db = None
 
     @property
     def s3(self):
         if self._s3 is None:
-            if self._s3_config is None:
-                raise Exception("'s3_config' is not set, provide valid 's3_config'")
+            s3_config = config.get_s3_config(self.env)
             self._s3 = S3Handler(
-                self._s3_config.access_key_id,
-                self._s3_config.secret_access_key,
-                self._s3_config.region,
-                self._s3_config.bucket
+                s3_config.access_key_id,
+                s3_config.secret_access_key,
+                s3_config.region,
+                s3_config.bucket
             )
         return self._s3
 
     @property
     def dify_db(self):
-        if self._dify_db is None and self._dify_db_name is not None:
-            self._dify_db = DifyDatabase(self._dify_db_name)
+        if self._dify_db is None:
+            self._dify_db = DifyDatabase(self.env)
         return self._dify_db
 
     def get_dataset_id_by_name(self, name) -> str:
@@ -146,8 +148,8 @@ class DifyPlatform(object):
             json_str = json_str[:last_brace_index] + '"' + json_str[last_brace_index:]
         return json_str
 
-    def analyze_content(self, query: str):
-        response = self.app_api.query_ai_agent(query, response_mode='streaming')
+    def analyze_content(self, app_api, query: str):
+        response = app_api.query_ai_agent(query, response_mode='streaming')
         try:
             answer = json.loads(self.fix_json_str(response.get('answer', {})))
         except json.JSONDecodeError:

@@ -1,4 +1,3 @@
-import datetime
 import threading
 from queue import Queue
 
@@ -72,7 +71,7 @@ def worker(kb, queue):
 
 @timing
 def upload_data_list_multithread(customer_data, num_threads):
-    upload_dify = DifyPlatform(api_config=config.api_config('dev'))
+    upload_dify = DifyPlatform('dev')
     kb_name = config.upload_dataset
     kb = upload_dify.init_knowledge_base(kb_name)
 
