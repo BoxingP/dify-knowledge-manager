@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, inspect, text, Table, MetaData
@@ -48,8 +49,10 @@ class Database(object):
         column_types = {column.key: column.type for column in mapper.columns}
         return column_types
 
-    def update_or_insert_data(self, dataframe, table, column_mapping: dict = None, temp_table_name='temp_data_df',
+    def update_or_insert_data(self, dataframe, table, column_mapping: dict = None, temp_table_name: str = None,
                               track_change=True, ignored_columns: list = None):
+        if temp_table_name is None:
+            temp_table_name = f'temp_data_df_{str(uuid.uuid4()).replace("-", "_")}'
         if ignored_columns is None:
             ignored_columns = []
         if column_mapping:
