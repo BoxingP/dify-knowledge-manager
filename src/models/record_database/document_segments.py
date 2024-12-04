@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Uuid, Integer, Text, VARCHAR, TIMESTAMP, func
+from sqlalchemy import Column, Uuid, Integer, Text, VARCHAR, TIMESTAMP, func, Boolean
 
 from src.models.record_database.base import Base
 
@@ -12,6 +12,7 @@ class DocumentSegments(Base):
     content = Column(Text)
     answer = Column(Text)
     keywords = Column(Text)
+    enabled = Column(Boolean)
     created_by = Column(VARCHAR(255))
     created_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
     updated_by = Column(VARCHAR(255))

@@ -10,7 +10,8 @@ def create_data_dict(name, segment_list):
         'segment': [
             {
                 'content': f'# Question\n{segment["question"]}\n\n# Context\n{segment["context"]}\n\n# Answer\n{segment["answer"]}',
-                'keywords': [segment['context']]
+                'keywords': [segment['context']],
+                'enabled': True
             }
             for segment in segment_list
         ]
@@ -45,7 +46,7 @@ def upload_data_list(data_list):
     upload_dify = DifyPlatform('dev')
     kb_name = config.erp_dataset
     kb = upload_dify.init_knowledge_base(kb_name)
-    kb.add_document(data_list)
+    kb.add_document(data_list, replace_listed=True)
 
 
 def main():

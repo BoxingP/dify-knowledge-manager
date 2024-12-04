@@ -48,7 +48,7 @@ class RecordDatabase(Database):
             stmt.delete(synchronize_session='fetch')
             session.commit()
 
-    def get_documents(self, url: str, dataset_id: str, with_segment=False) -> list:
+    def get_documents(self, url: str, dataset_id: str, with_segment=False, is_enabled: bool = None) -> list:
         try:
             with database_session(self.session) as session:
                 query = session.query(
@@ -68,6 +68,8 @@ class RecordDatabase(Database):
                 ).filter(
                     Datasets.url == url, Datasets.id == dataset_id
                 )
+                if is_enabled is not None:
+                    query = query.filter(Documents.enabled == is_enabled)
                 results = query.all()
             records = {}
             for result in results:
@@ -113,7 +115,8 @@ class RecordDatabase(Database):
                     DocumentSegments.document_id,
                     DocumentSegments.content,
                     DocumentSegments.answer,
-                    DocumentSegments.keywords
+                    DocumentSegments.keywords,
+                    DocumentSegments.enabled
                 ).filter(
                     DocumentSegments.document_id == document_id
                 )

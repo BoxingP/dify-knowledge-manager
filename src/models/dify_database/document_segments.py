@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Uuid, Integer, Text
+from sqlalchemy import Column, Uuid, Integer, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSON
 
 from src.models.dify_database.base import Base
@@ -14,3 +14,4 @@ class DocumentSegments(Base):
     content = Column(Text)
     keywords = Column(JSON)
     answer = Column(Text)
+    enabled = Column(Boolean)

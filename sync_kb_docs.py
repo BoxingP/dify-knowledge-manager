@@ -8,11 +8,11 @@ def sync_documents_to_target_knowledge_base(source_dify, target_dify, record_doc
     for kb_mapping in config.get_sync_mapping():
         source_kb = source_dify.init_knowledge_base(kb_mapping.get('source'))
         target_kb = target_dify.init_knowledge_base(kb_mapping.get('target'))
-        source_documents = source_kb.fetch_documents(source='api', with_segment=True)
-        target_kb.add_document(source_documents, sort_document=True)
+        source_documents = source_kb.fetch_documents(source='api', with_segment=True, is_enabled=True)
+        target_kb.add_document(source_documents, replace_listed=True, remove_unlisted=True, sort_document=True)
         if record_documents:
-            target_kb.record_knowledge_base_info()
-            target_kb.record_documents(source_documents)
+            source_kb.record_knowledge_base_info()
+            source_kb.record_documents(source_documents)
 
 
 @timing

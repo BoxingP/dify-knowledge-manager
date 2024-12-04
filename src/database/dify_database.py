@@ -18,16 +18,22 @@ class DifyDatabase(Database):
             result = query.first()
         return Path(result[0]) if result else None
 
-    def get_documents(self, dataset_id: str, with_segment: bool = False) -> list[Dict[str, Any]]:
+    def get_documents(self, dataset_id: str,
+                      with_segment: bool = False, is_enabled: Optional[bool] = None) -> list[Dict[str, Any]]:
         with database_session(self.session) as session:
             query = session.query(
                 Documents.id.label('document_id'),
                 Documents.position.label('document_position'),
                 Documents.name,
+                Documents.enabled,
                 Datasets.id.label('dataset_id')
             ).select_from(Documents)
             query = query.outerjoin(Datasets, Datasets.id == Documents.dataset_id)
             query = query.filter(Datasets.id == dataset_id)
+
+            if is_enabled is not None:
+                query = query.filter(Documents.enabled == is_enabled)
+
             results = query.all()
 
             documents = self._process_documents(results)
@@ -56,7 +62,8 @@ class DifyDatabase(Database):
                 DocumentSegments.document_id,
                 DocumentSegments.content,
                 DocumentSegments.answer,
-                DocumentSegments.keywords
+                DocumentSegments.keywords,
+                DocumentSegments.enabled
             ).filter(
                 DocumentSegments.document_id == document_id
             )

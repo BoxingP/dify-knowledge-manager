@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Uuid, Integer, VARCHAR
+from sqlalchemy import Column, Uuid, Integer, VARCHAR, Boolean
 
 from src.models.dify_database.base import Base
 
@@ -10,3 +10,4 @@ class Documents(Base):
     dataset_id = Column(Uuid)
     position = Column(Integer)
     name = Column(VARCHAR(255))
+    enabled = Column(Boolean)

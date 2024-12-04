@@ -36,7 +36,8 @@ def get_data_list(segment_size: int):
                 "name": data_dict_name,
                 "segment": {
                     "content": '\n\n---\n\n'.join(temp_list),
-                    "keywords": temp_keywords_list
+                    "keywords": temp_keywords_list,
+                    "enabled": True
                 }
             }
             data_list.append(data_dict)
@@ -50,7 +51,8 @@ def get_data_list(segment_size: int):
                 "name": data_dict_name,
                 "segment": {
                     "content": '\n\n---\n\n'.join(temp_list),
-                    "keywords": temp_keywords_list
+                    "keywords": temp_keywords_list,
+                    "enabled": True
                 }
             }
             data_list.append(data_dict)
@@ -62,7 +64,7 @@ def worker(kb, queue):
     while not queue.empty():
         customer_chunk = queue.get()
         try:
-            kb.add_document([customer_chunk], replace_document=False)
+            kb.add_document([customer_chunk])
             queue.task_done()
         except Exception as ex:
             print(f'An exception occurred: {ex}, re-querying...')

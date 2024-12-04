@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Uuid, Integer, VARCHAR, TIMESTAMP, func
+from sqlalchemy import Column, Uuid, Integer, VARCHAR, TIMESTAMP, func, Boolean
 
 from src.models.record_database.base import Base
 
@@ -10,6 +10,7 @@ class Documents(Base):
     dataset_id = Column(Uuid, primary_key=True)
     position = Column(Integer)
     name = Column(VARCHAR(255))
+    enabled = Column(Boolean)
     created_by = Column(VARCHAR(255))
     created_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
     updated_by = Column(VARCHAR(255))

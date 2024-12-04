@@ -32,21 +32,30 @@ class DatasetApi(Api):
 
         return datasets
 
-    def get_documents_in_dataset(self, dataset_id, limit=20):
-        page = 1
-        has_more = True
-        documents = []
-
-        while has_more:
+    def get_documents_in_dataset(self, dataset_id, is_enabled: bool = None, limit=100):
+        def fetch_documents_page(dataset_id, page, limit):
             endpoint = f'datasets/{dataset_id}/documents'
             params = {'page': page, 'limit': limit}
-            response = self.fetch_data(endpoint, params=params)
-            keys = ['id', 'position', 'name']
-            documents.extend([{key: item[key] for key in keys} for item in response['data']])
+            return self.fetch_data(endpoint, params=params)
+
+        def filter_documents(documents, is_enabled):
+            keys = ['id', 'position', 'name', 'enabled']
+            if is_enabled is None:
+                return [{key: item[key] for key in keys} for item in documents]
+            return [{key: item[key] for key in keys} for item in documents if item['enabled'] == is_enabled]
+
+        page = 1
+        has_more = True
+        all_documents = []
+
+        while has_more:
+            response = fetch_documents_page(dataset_id, page, limit)
+            filtered_documents = filter_documents(response['data'], is_enabled)
+            all_documents.extend(filtered_documents)
             has_more = response['has_more']
             page += 1
 
-        return documents
+        return all_documents
 
     def create_document(self, dataset_id, document_name, max_retry=3, backoff_factor=1):
         headers = {'Content-Type': 'application/json'}
@@ -84,11 +93,11 @@ class DatasetApi(Api):
         endpoint = f'datasets/{dataset_id}/documents/{document_id}/segments'
         response = self.fetch_data(endpoint, headers=headers)
         segments = response['data']
-        keys = ['id', 'position', 'document_id', 'content', 'answer', 'keywords']
+        keys = ['id', 'position', 'document_id', 'content', 'answer', 'keywords', 'enabled']
         segments_list = [{key: segment[key] for key in keys} for segment in segments]
         return sorted(segments_list, key=lambda segment: segment['position'])
 
-    def create_segment_in_document(self, dataset_id, document_id, segment: dict):
+    def create_segment_in_document(self, dataset_id, document_id, segment: dict) -> str:
         headers = {'Content-Type': 'application/json'}
         endpoint = f'datasets/{dataset_id}/documents/{document_id}/segments'
         data = {
@@ -100,7 +109,7 @@ class DatasetApi(Api):
             ]
         }
         response = self.post_data(endpoint, headers=headers, data=data)
-        return response
+        return response.get('data', [''])[0].get('id', '')
 
     def create_document_by_file(self, dataset_id, file_path, separator='\n', max_tokens=1000):
         endpoint = f'datasets/{dataset_id}/document/create_by_file'

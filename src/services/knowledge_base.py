@@ -40,6 +40,8 @@ class KnowledgeBase(object):
         ]
         self.record_db.save_documents(modified_documents)
         for document in documents:
+            if 'segment' not in document:
+                continue
             segment_ids = [segment['id'] for segment in document['segment']]
             segment_ids_in_record = [segment['id'] for segment in self._fetch_segments('record', document['id'])]
             segments_to_remove_in_record = [segment_id for segment_id in segment_ids_in_record if
@@ -53,15 +55,15 @@ class KnowledgeBase(object):
                     segment['keywords'] = ','.join(keywords)
             self.record_db.save_segments(document['segment'])
 
-    def _fetch_all_documents(self, source):
+    def _fetch_all_documents(self, source, is_enabled: bool):
         if source == 'api':
-            return self.api.get_documents_in_dataset(self.dataset_id)
+            return self.api.get_documents_in_dataset(self.dataset_id, is_enabled)
         elif source == 'db':
             if self.db is None:
                 raise Exception('Dify database is not set')
-            return self.db.get_documents(self.dataset_id)
+            return self.db.get_documents(self.dataset_id, is_enabled)
         elif source == 'record':
-            return self.record_db.get_documents(self.api.base_url, self.dataset_id)
+            return self.record_db.get_documents(self.api.base_url, self.dataset_id, is_enabled)
         else:
             return None
 
@@ -97,8 +99,8 @@ class KnowledgeBase(object):
         if with_image and 'segment' in document:
             document['image'] = self._get_images_from_segments(document['segment'])
 
-    def fetch_documents(self, source, document_id=None, with_segment=False, with_image=False):
-        documents = self._fetch_all_documents(source)
+    def fetch_documents(self, source, document_id=None, with_segment=False, with_image=False, is_enabled: bool = None):
+        documents = self._fetch_all_documents(source, is_enabled)
         if documents is None or not documents:
             return None
 
@@ -120,7 +122,8 @@ class KnowledgeBase(object):
                     return document['id']
         return None
 
-    def add_document(self, documents, replace_document=True, sort_document=False) -> dict:
+    def add_document(self, documents, replace_listed: bool = False, remove_unlisted: bool = False,
+                     sort_document: bool = False) -> dict:
         if isinstance(documents, dict):
             documents = [documents]
         elif not isinstance(documents, list):
@@ -128,24 +131,36 @@ class KnowledgeBase(object):
 
         if sort_document:
             documents = sorted(documents, key=lambda x: x['position'])
-        exist_documents = None
-        if replace_document:
-            exist_documents = self.fetch_documents(source='api')
+
+        if replace_listed or remove_unlisted:
+            exist_documents = self.fetch_documents(source='db')
+            document_names = {document['name'].strip().lower() for document in documents}
+            listed_ids = [document['id'] for document in exist_documents
+                          if document['name'].strip().lower() in document_names]
+            unlisted_ids = [document['id'] for document in exist_documents
+                            if document['name'].strip().lower() not in document_names]
+            if replace_listed:
+                self.delete_document(listed_ids)
+            if remove_unlisted:
+                self.delete_document(unlisted_ids)
+
         document_ids = {}
         for document in documents:
-            if replace_document:
-                exist_document_id = self._get_document_id_by_name(document['name'], exist_documents)
-                if exist_document_id:
-                    self.api.delete_document(self.dataset_id, exist_document_id)
             document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
             self._wait_document_embedding(batch_id, document_id)
-            segments = document['segment']
-            if isinstance(segments, dict):
-                segments = [segments]
-            elif sort_document:
-                segments = sorted(document['segment'], key=lambda x: x['position'])
-            for segment in segments:
-                self.api.create_segment_in_document(self.dataset_id, document_id, segment)
+            if 'segment' in document:
+                segments = document['segment']
+                if isinstance(segments, dict):
+                    segments = [segments]
+                elif sort_document:
+                    segments = sorted(document['segment'], key=lambda x: x['position'])
+                for segment in segments:
+                    segment_id = self.api.create_segment_in_document(self.dataset_id, document_id, segment)
+                    if not segment.get('enabled'):
+                        self.api.update_segment_in_document(
+                            self.dataset_id, document_id, segment_id, segment.get('content'), segment.get('answer'),
+                            segment.get('keywords'), False
+                        )
             document_ids[document['name']] = document_id
         return document_ids
 

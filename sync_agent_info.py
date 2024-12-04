@@ -12,14 +12,17 @@ def generate_segment(row):
         f"# description\n{row['description']}\n\n"
         f"# remark\n{row['remark']}\n\n"
     )
-    return {'content': content}
+    return {'content': content, 'enabled': True}
 
 
 def update_agent_info(agent_info):
     dify = DifyPlatform('dev')
     kb_name = 'Agent pool'
     kb = dify.init_knowledge_base(kb_name)
-    kb.add_document({'name': 'agent_info', 'segment': agent_info.apply(generate_segment, axis=1).to_list()})
+    kb.add_document(
+        {'name': 'agent_info', 'segment': agent_info.apply(generate_segment, axis=1).to_list()},
+        replace_listed=True
+    )
 
 
 def main():

@@ -104,11 +104,12 @@ def add_document_to_kb(kb, document_name, document_str, response):
             {
                 'content': document_str,
                 'answer': None,
-                'keywords': response.get('keywords', [])
+                'keywords': response.get('keywords', []),
+                'enabled': True
             }
         ]
     }
-    document_id = kb.add_document(document, replace_document=True, sort_document=False)
+    document_id = kb.add_document(document, replace_listed=True, sort_document=False)
     return document_id[document_name]
 
 
@@ -123,11 +124,12 @@ def add_summary_to_kb(kb, document_name, release_date, response, document_id):
                     f'{response.get("summary", "")}'
                 ),
                 'answer': None,
-                'keywords': response.get('keywords', [])
+                'keywords': response.get('keywords', []),
+                'enabled': True
             }
         ]
     }
-    kb.add_document(document, replace_document=True, sort_document=False)
+    kb.add_document(document, replace_listed=True, sort_document=False)
 
 
 def save_docx_file(dify, file):
