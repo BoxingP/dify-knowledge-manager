@@ -134,6 +134,8 @@ class KnowledgeBase(object):
 
         if replace_listed or remove_unlisted:
             exist_documents = self.fetch_documents(source='db')
+            if exist_documents is None:
+                exist_documents = []
             document_names = {document['name'].strip().lower() for document in documents}
             listed_ids = [document['id'] for document in exist_documents
                           if document['name'].strip().lower() in document_names]
