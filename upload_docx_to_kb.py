@@ -109,8 +109,8 @@ def add_document_to_kb(kb, document_name, document_str, response):
             }
         ]
     }
-    document_id = kb.add_document(document, replace_listed=True, sort_document=False)
-    return document_id[document_name]
+    docs_name_id_mapping = kb.add_document(document, replace_listed=True, sort_document=False)
+    return docs_name_id_mapping[document_name]
 
 
 def add_summary_to_kb(kb, document_name, release_date, response, document_id):

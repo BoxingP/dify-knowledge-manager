@@ -80,7 +80,7 @@ class Database(object):
             stmt = insert(table).from_select(temp_table_class.columns, temp_table_class.select())
             if chk_columns:
                 where_condition = text('OR '.join(
-                    [f'({table.__tablename__}.{col} IS DISTINCT FROM excluded.{col})' for col in chk_columns]))
+                    [f'({table.__tablename__}.{col}::text IS DISTINCT FROM excluded.{col}::text)' for col in chk_columns]))
             else:
                 where_condition = None
             stmt = stmt.on_conflict_do_update(

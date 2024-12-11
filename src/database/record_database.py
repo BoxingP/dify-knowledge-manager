@@ -1,5 +1,10 @@
+import datetime
+import uuid
+
 import pandas as pd
-from sqlalchemy import update
+import psycopg2
+from dateutil.relativedelta import relativedelta
+from sqlalchemy import update, func, or_
 from sqlalchemy.exc import ProgrammingError
 
 from src.database.database import Database, database_session
@@ -8,6 +13,8 @@ from src.models.record_database.datasets import Datasets
 from src.models.record_database.document_segments import DocumentSegments
 from src.models.record_database.documents import Documents
 from src.models.record_database.docx_files import DocxFiles
+from src.models.record_database.mails import Mails
+from src.models.record_database.mails_documents_mapping import MailsDocumentsMapping
 
 
 class RecordDatabase(Database):
@@ -201,3 +208,104 @@ class RecordDatabase(Database):
                 columns=[column['name'] for column in query.column_descriptions]
             )
             return df
+
+    def get_mail_id_by_entry_id(self, entry_id):
+        with database_session(self.session) as session:
+            try:
+                result = session.query(Mails.id).filter(func.lower(Mails.entry_id) == entry_id.lower()).first()
+                if result is not None:
+                    return str(result[0])
+                else:
+                    return None
+            except ProgrammingError as e:
+                if isinstance(e.orig, psycopg2.errors.UndefinedTable):
+                    return None
+                else:
+                    raise
+
+    def save_mails(self, mails, ignored_columns=None):
+        table = Mails
+        self.create_table_if_not_exists(table)
+        self.update_or_insert_data(mails, table, ignored_columns=ignored_columns)
+
+    def convert_uuid_columns(self, df):
+        for column in df.columns:
+            if df[column].apply(type).eq(uuid.UUID).any():
+                df[column] = df[column].astype(str)
+        return df
+
+    def get_mails(self, categories: list = None, get_recent_updated=False, years=0, months=0, days=0):
+        with database_session(self.session) as session:
+            table = Mails
+            query = session.query(table)
+            if categories is not None:
+                query = query.filter(func.lower(table.category).in_([category.lower() for category in categories]))
+            if get_recent_updated:
+                now = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8)))
+                if years or months or days:
+                    days_ago = now - relativedelta(years=years, months=months, days=days)
+                else:
+                    days_ago = now
+                query = query.filter(or_(table.created_on >= days_ago, table.updated_on >= days_ago))
+
+            results = query.all()
+            df = pd.DataFrame(
+                [{column: getattr(x, column) for column in table.__table__.columns.keys()} for x in results])
+            df = self.convert_uuid_columns(df)
+            return df
+
+    def get_mail_related_document_ids(self, mail_id, dataset_id) -> list:
+        try:
+            with database_session(self.session) as session:
+                query = session.query(
+                    MailsDocumentsMapping.document_id
+                ).outerjoin(
+                    Documents, MailsDocumentsMapping.document_id == Documents.id
+                ).filter(MailsDocumentsMapping.mail_id == mail_id.lower(), Documents.dataset_id == dataset_id.lower())
+                results = query.all()
+                return [str(result[0]) for result in results]
+        except ProgrammingError as e:
+            if isinstance(e.orig, psycopg2.errors.UndefinedTable):
+                print(f'Error happens: {e}')
+                return []
+            else:
+                raise
+
+    def delete_document(self, document_id):
+        with database_session(self.session) as session:
+            session.query(DocumentSegments).filter(DocumentSegments.document_id == document_id).delete(
+                synchronize_session='fetch')
+            session.query(MailsDocumentsMapping).filter(MailsDocumentsMapping.document_id == document_id).delete(
+                synchronize_session='fetch')
+            session.query(Documents).filter(Documents.id == document_id).delete(synchronize_session='fetch')
+            session.commit()
+
+    def save_mail_document_mapping(self, mail_id, document_id, dataset_id):
+        table = MailsDocumentsMapping
+        self.create_table_if_not_exists(table)
+
+        with database_session(self.session) as session:
+            document_ids = [
+                tup[0] for tup in session.query(table.document_id).filter(table.mail_id == mail_id.lower()).all()
+            ]
+            related_dataset_ids = []
+            for doc_id in document_ids:
+                document = session.query(Documents).filter(Documents.id == doc_id).first()
+                if document is not None:
+                    related_dataset_ids.append(str(document.dataset_id))
+            if dataset_id in related_dataset_ids:
+                existing_mapping = session.query(
+                    table
+                ).outerjoin(
+                    Documents, table.document_id == Documents.id
+                ).filter(
+                    table.mail_id == mail_id, Documents.dataset_id == dataset_id
+                ).update(
+                    {table.document_id: document_id}, synchronize_session=False
+                )
+                if existing_mapping:
+                    session.commit()
+            else:
+                new_mapping = table(mail_id=mail_id, document_id=document_id)
+                session.add(new_mapping)
+                session.commit()

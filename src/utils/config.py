@@ -133,5 +133,15 @@ class Config(object):
     def get_sync_mapping(self):
         return self.app_config.get('sync', {}).get('mapping', {})
 
+    def get_mailbox(self) -> list:
+        return self.app_config.get('mailboxes', [])
+
+    def get_dataset_by_category(self, category: str):
+        for mailbox in self.get_mailbox():
+            for subfolder in mailbox.get('inbox').get('subfolders'):
+                if subfolder.get('category').lower() == category.lower():
+                    return subfolder.get('dataset')
+        return None
+
 
 config = Config()

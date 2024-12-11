@@ -146,7 +146,7 @@ class KnowledgeBase(object):
             if remove_unlisted:
                 self.delete_document(unlisted_ids)
 
-        document_ids = {}
+        docs_name_id_mapping = {}
         for document in documents:
             document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
             self._wait_document_embedding(batch_id, document_id)
@@ -163,8 +163,8 @@ class KnowledgeBase(object):
                             self.dataset_id, document_id, segment_id, segment.get('content'), segment.get('answer'),
                             segment.get('keywords'), False
                         )
-            document_ids[document['name']] = document_id
-        return document_ids
+            docs_name_id_mapping[document['name']] = document_id
+        return docs_name_id_mapping
 
     def _wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 600):
         index = 0
