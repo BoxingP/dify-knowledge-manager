@@ -9,34 +9,27 @@ class DatasetApi(Api):
     def __init__(self, url, secret_key):
         super(DatasetApi, self).__init__(base_url=url, secret_header={'Authorization': f'Bearer {secret_key}'})
 
-    def get_datasets(self, limit=20, max_retry=3, backoff_factor=1):
+    def get_datasets(self, limit=20, **kwargs):
         page = 1
         datasets = []
 
         while True:
-            response = None
-            for _ in range(max_retry):
-                response = self.fetch_data('datasets', params={'page': page, 'limit': limit})
-                if response is not None:
-                    break
-                sleep_time = backoff_factor * (2 ** _)
-                time.sleep(sleep_time)
+            response = self.get('datasets', params={'page': page, 'limit': limit}, **kwargs)
 
-            if response is None:
-                raise ConnectTimeoutError(f'Failed to get datasets in {self.base_url}')
-
-            datasets.extend(response['data'])
-            if not response.get('has_more', False):
+            if response.data is None:
+                raise ConnectTimeoutError(f'Failed to get datasets info in {self.base_url}')
+            datasets.extend(response.data.get('data'))
+            if not response.data.get('has_more', False):
                 break
             page += 1
 
         return datasets
 
-    def get_documents_in_dataset(self, dataset_id, is_enabled: bool = None, limit=100):
+    def get_documents_in_dataset(self, dataset_id, is_enabled: bool = None, limit=100, max_attempt=3):
         def fetch_documents_page(dataset_id, page, limit):
             endpoint = f'datasets/{dataset_id}/documents'
             params = {'page': page, 'limit': limit}
-            return self.fetch_data(endpoint, params=params)
+            return self.get(endpoint, params=params, max_attempt=max_attempt)
 
         def filter_documents(documents, is_enabled):
             keys = ['id', 'position', 'name', 'enabled']
@@ -50,9 +43,9 @@ class DatasetApi(Api):
 
         while has_more:
             response = fetch_documents_page(dataset_id, page, limit)
-            filtered_documents = filter_documents(response['data'], is_enabled)
+            filtered_documents = filter_documents(response.data.get('data'), is_enabled)
             all_documents.extend(filtered_documents)
-            has_more = response['has_more']
+            has_more = response.data.get('has_more')
             page += 1
 
         return all_documents
@@ -68,10 +61,10 @@ class DatasetApi(Api):
             }
         }
         for retry in range(max_retry):
-            response = self.post_data(f'datasets/{dataset_id}/document/create_by_text', headers=headers, data=data)
-            if response is not None:
+            response = self.post(f'datasets/{dataset_id}/document/create_by_text', headers=headers, data=data)
+            if response.data is not None:
                 try:
-                    return response['document']['id'], response['batch']
+                    return response.data['document']['id'], response.data['batch']
                 except KeyError:
                     raise ValueError(
                         f'Unexpected response when creating document with name {document_name}: {response}')
@@ -83,16 +76,16 @@ class DatasetApi(Api):
 
     def delete_document(self, dataset_id, document_id):
         try:
-            response = self.delete_data(f'datasets/{dataset_id}/documents/{document_id}')
-            return f'{document_id} is deleted: {response["result"]}'
+            response = self.delete(f'datasets/{dataset_id}/documents/{document_id}')
+            return f'{document_id} is deleted: {response.data["result"]}'
         except TypeError as e:
             return f'{document_id} has failed to delete: {e}'
 
-    def get_segments_from_document(self, dataset_id, document_id):
+    def get_segments_from_document(self, dataset_id, document_id, max_attempt=3):
         headers = {'Content-Type': 'application/json'}
         endpoint = f'datasets/{dataset_id}/documents/{document_id}/segments'
-        response = self.fetch_data(endpoint, headers=headers)
-        segments = response['data']
+        response = self.get(endpoint, headers=headers, max_attempt=max_attempt)
+        segments = response.data.get('data')
         keys = ['id', 'position', 'document_id', 'content', 'answer', 'keywords', 'enabled']
         segments_list = [{key: segment[key] for key in keys} for segment in segments]
         return sorted(segments_list, key=lambda segment: segment['position'])
@@ -108,8 +101,8 @@ class DatasetApi(Api):
                  }
             ]
         }
-        response = self.post_data(endpoint, headers=headers, data=data)
-        return response.get('data', [''])[0].get('id', '')
+        response = self.post(endpoint, headers=headers, data=data, max_attempt=3)
+        return response.data.get('data', [''])[0].get('id', '')
 
     def create_document_by_file(self, dataset_id, file_path, separator='\n', max_tokens=1000):
         endpoint = f'datasets/{dataset_id}/document/create_by_file'
@@ -125,7 +118,7 @@ class DatasetApi(Api):
                 'mode': 'custom'
             }
         }
-        response = self.post_data(endpoint, data=data, file_path=file_path)
+        response = self.post(endpoint, data=data, file_path=file_path)
         return response
 
     def update_segment_in_document(self, dataset_id, document_id, segment_id, content,
@@ -141,14 +134,14 @@ class DatasetApi(Api):
             data['segment']['keywords'] = keywords
         if enabled is not None:
             data['segment']['enabled'] = enabled
-        response = self.post_data(endpoint, headers=headers, data=data)
+        response = self.post(endpoint, headers=headers, data=data)
         return response
 
     def get_document_embedding_status(self, dataset_id, batch_id, document_id):
         endpoint = f'datasets/{dataset_id}/documents/{batch_id}/indexing-status'
-        response = self.fetch_data(endpoint)
-        if response is not None and 'data' in response:
-            for item in response['data']:
+        response = self.get(endpoint)
+        if response.data is not None and 'data' in response.data:
+            for item in response.data['data']:
                 if 'id' in item and item['id'] == document_id:
                     if 'indexing_status' in item:
                         return item['indexing_status']

@@ -31,7 +31,7 @@ class DifyPlatform(object):
                 app_token = getattr(self.api_config, f'{app}_app_token')
                 setattr(self, f'{app}_api', AppApi(self.api_config.url, app_token))
         self.dataset_api = DatasetApi(self.api_config.url, self.api_config.dataset_token)
-        self.datasets = self.dataset_api.get_datasets()
+        self.datasets = self.dataset_api.get_datasets(max_attempt=3)
         self.record_db = RecordDatabase('record')
         self._s3 = None
         self._dify_db = None
@@ -68,6 +68,8 @@ class DifyPlatform(object):
         image_paths = {}
         for uuid in image_uuids:
             image_path_in_dify = self.dify_db.get_image_path(uuid)
+            if image_path_in_dify is None:
+                continue
             if self.s3.find_and_download_file(str(image_path_in_dify.as_posix()), config.image_dir_path):
                 image_path = config.image_dir_path / image_path_in_dify.name
                 image_paths[uuid] = image_path
@@ -149,7 +151,7 @@ class DifyPlatform(object):
         return json_str
 
     def analyze_content(self, app_api, query: str):
-        response = app_api.query_ai_agent(query, response_mode='streaming')
+        response = app_api.query_ai_agent(query, stream=True)
         try:
             answer = json.loads(self.fix_json_str(response.get('answer', {})))
         except json.JSONDecodeError:

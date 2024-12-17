@@ -61,9 +61,11 @@ class KnowledgeBase(object):
         elif source == 'db':
             if self.db is None:
                 raise Exception('Dify database is not set')
-            return self.db.get_documents(self.dataset_id, is_enabled)
+            return self.db.get_documents(self.dataset_id, with_segment=False, is_enabled=is_enabled)
         elif source == 'record':
-            return self.record_db.get_documents(self.api.base_url, self.dataset_id, is_enabled)
+            return self.record_db.get_documents(
+                self.api.base_url, self.dataset_id, with_segment=False, is_enabled=is_enabled
+            )
         else:
             return None
 
@@ -177,10 +179,10 @@ class KnowledgeBase(object):
 
     def create_document_by_file(self, file_path):
         response = self.api.create_document_by_file(self.dataset_id, file_path)
-        if response is None:
+        if response.data is None:
             return None
-        document_id = response['document']['id']
-        batch_id = response['batch']
+        document_id = response.data['document']['id']
+        batch_id = response.data['batch']
         self._wait_document_embedding(batch_id, document_id)
         return document_id
 

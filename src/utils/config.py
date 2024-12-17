@@ -98,11 +98,11 @@ class Config(object):
         env = env.upper()
 
         base_fields = ['url', 'dataset_token']
-        app_fields = [f'{app}_app_token' for app in apps] if apps else []
+        app_fields = [f'{app.replace(" ", "_")}_app_token' for app in apps] if apps else []
         fields = base_fields + app_fields
 
         base_values = [os.getenv(f'{env}_API_SERVER'), os.getenv(f'{env}_DATASET_SECRET_KEY')]
-        app_values = [os.getenv(f'{env}_{app.upper()}_APP_SECRET_KEY') for app in apps] if apps else []
+        app_values = [os.getenv(f'{env}_{app.replace(" ", "_").upper()}_APP_SECRET_KEY') for app in apps] if apps else []
         values = base_values + app_values
 
         if None in values:
