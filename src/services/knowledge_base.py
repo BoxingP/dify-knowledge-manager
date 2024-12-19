@@ -124,8 +124,8 @@ class KnowledgeBase(object):
                     return document['id']
         return None
 
-    def add_document(self, documents, replace_listed: bool = False, remove_unlisted: bool = False,
-                     sort_document: bool = False) -> dict:
+    def add_document(self, documents, replace_listed: bool = False, skip_listed: bool = False,
+                     remove_unlisted: bool = False, sort_document: bool = False) -> dict:
         if isinstance(documents, dict):
             documents = [documents]
         elif not isinstance(documents, list):
@@ -134,7 +134,7 @@ class KnowledgeBase(object):
         if sort_document:
             documents = sorted(documents, key=lambda x: x['position'])
 
-        if replace_listed or remove_unlisted:
+        if replace_listed or remove_unlisted or skip_listed:
             exist_documents = self.fetch_documents(source='db')
             if exist_documents is None:
                 exist_documents = []
@@ -145,6 +145,12 @@ class KnowledgeBase(object):
                             if document['name'].strip().lower() not in document_names]
             if replace_listed:
                 self.delete_document(listed_ids)
+            else:
+                if skip_listed:
+                    exist_document_names = {document['name'].strip().lower() for document in exist_documents}
+                    documents = [document for document in documents if
+                                 document['name'].strip().lower() not in exist_document_names]
+                    print(f'Skip {len(document_names) - len(documents)} existing documents')
             if remove_unlisted:
                 self.delete_document(unlisted_ids)
 

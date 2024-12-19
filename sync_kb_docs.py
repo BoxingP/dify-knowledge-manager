@@ -24,7 +24,9 @@ def sync_documents_to_target_knowledge_base(source_dify, target_dify, record_doc
             f"Fetching completed: {len(filtered_documents)} source files in dataset '{source_kb.dataset_name}' from '{source}'"
         )
         if filtered_documents:
-            target_kb.add_document(filtered_documents, replace_listed=True, remove_unlisted=False, sort_document=True)
+            target_kb.add_document(
+                filtered_documents, replace_listed=False, skip_listed=True, remove_unlisted=False, sort_document=True
+            )
             if record_documents:
                 source_kb.record_knowledge_base_info()
                 source_kb.record_documents(filtered_documents)
