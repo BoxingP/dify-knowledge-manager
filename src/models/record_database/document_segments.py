@@ -13,6 +13,7 @@ class DocumentSegments(Base):
     answer = Column(Text)
     keywords = Column(Text)
     enabled = Column(Boolean)
+    status = Column(VARCHAR(255))
     created_by = Column(VARCHAR(255))
     created_on = Column(TIMESTAMP(timezone=False), server_default=func.timezone('Asia/Shanghai', func.now()))
     updated_by = Column(VARCHAR(255))

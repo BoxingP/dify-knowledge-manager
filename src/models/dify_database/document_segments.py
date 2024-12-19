@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Uuid, Integer, Text, Boolean
+from sqlalchemy import Column, Uuid, Integer, Text, Boolean, VARCHAR
 from sqlalchemy.dialects.postgresql import JSON
 
 from src.models.dify_database.base import Base
@@ -15,3 +15,4 @@ class DocumentSegments(Base):
     keywords = Column(JSON)
     answer = Column(Text)
     enabled = Column(Boolean)
+    status = Column(VARCHAR(255))

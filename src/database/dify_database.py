@@ -63,7 +63,8 @@ class DifyDatabase(Database):
                 DocumentSegments.content,
                 DocumentSegments.answer,
                 DocumentSegments.keywords,
-                DocumentSegments.enabled
+                DocumentSegments.enabled,
+                DocumentSegments.status
             ).filter(
                 DocumentSegments.document_id == document_id
             )

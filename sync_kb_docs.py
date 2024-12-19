@@ -3,20 +3,31 @@ from src.utils.config import config
 from src.utils.time_utils import timing
 
 
+def filter_documents(documents):
+    filtered = []
+    if documents is None:
+        return filtered
+    for document in documents:
+        if all(segment['status'] == 'completed' for segment in document['segment']):
+            filtered.append(document)
+    return filtered
+
+
 @timing
 def sync_documents_to_target_knowledge_base(source_dify, target_dify, record_documents=True, source='api'):
     for kb_mapping in config.get_sync_mapping():
         source_kb = source_dify.init_knowledge_base(kb_mapping.get('source'))
         target_kb = target_dify.init_knowledge_base(kb_mapping.get('target'))
         source_documents = source_kb.fetch_documents(source=source, with_segment=True, is_enabled=True)
+        filtered_documents = filter_documents(source_documents)
         print(
-            f"Fetching completed: {len(source_documents) if source_documents is not None else 0} source files "
-            f"in dataset '{source_kb.dataset_name}' from '{source}'"
+            f"Fetching completed: {len(filtered_documents)} source files in dataset '{source_kb.dataset_name}' from '{source}'"
         )
-        target_kb.add_document(source_documents, replace_listed=True, remove_unlisted=False, sort_document=True)
-        if record_documents:
-            source_kb.record_knowledge_base_info()
-            source_kb.record_documents(source_documents)
+        if filtered_documents:
+            target_kb.add_document(filtered_documents, replace_listed=True, remove_unlisted=False, sort_document=True)
+            if record_documents:
+                source_kb.record_knowledge_base_info()
+                source_kb.record_documents(filtered_documents)
 
 
 @timing
