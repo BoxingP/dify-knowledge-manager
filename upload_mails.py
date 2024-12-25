@@ -1,4 +1,3 @@
-import json
 import re
 import uuid
 from collections import defaultdict
@@ -8,8 +7,8 @@ import win32com.client
 
 from src.database.record_database import RecordDatabase
 from src.services.dify_platform import DifyPlatform
-from src.services.knowledge_base import KnowledgeBase
 from src.utils.config import config
+from src.utils.proofpoint_url_decoder import decode_ppv3
 
 
 def get_sender_info(mail):
@@ -96,23 +95,23 @@ def extract_info(row):
     for item in row['cleaned_body']:
         category = item['category']
         for content in item['content']:
-            title = content['title']
-            title_part = re.search('(.+?)<', title).group(1).strip()
+            title = content['title']['cn']
             source = content['source']
             news_source = re.search(r'[（(](.*?)[)）]\s*\d', source)
             news_source_str = news_source.group(1) if news_source else ''
             date = re.search(r'(\d{1,2})/(\d{1,2})-(\d{4})', source)
             date_str = f'{date.group(3)}{date.group(2).zfill(2)}{date.group(1).zfill(2)}' if date else ''
-            name = f'{date_str} - {category} - {news_source_str} - {title_part}'
+            name = f'{date_str} - {category} - {news_source_str} - {title}'
             segment.append(
                 {
                     'content': (
                         f'# {name}{delimiter}{delimiter}'
                         f'## category{delimiter}{category.lower()}{delimiter}{delimiter}'
-                        f'## title{delimiter}{content["title"]}{delimiter}{delimiter}'
+                        f'## title{delimiter}{title}{delimiter}{delimiter}'
                         f'## date{delimiter}{date_str}{delimiter}{delimiter}'
                         f'## source{delimiter}{content["source"]}{delimiter}{delimiter}'
-                        f'## content{delimiter}{content["content"]}'
+                        f'## url{delimiter}{content["url"]}{delimiter}{delimiter}'
+                        f'## summary{delimiter}{content["summary"]["en"]}'
                     ),
                     'answer': None,
                     'keywords': [],
@@ -179,44 +178,83 @@ def split_text_by_headings(s: str) -> list:
     return sections
 
 
-def convert_string_to_json(s: str):
+def is_url_in(text: str, url: str) -> bool:
+    pattern = r'<\s*' + re.escape(url) + r'\s*>'
+    return re.search(pattern, text) is not None
+
+
+def extract_url(text: str) -> str:
+    match = re.search(r'<\s*(https?://.*?)>', text)
+    return match.group(1).strip() if match else ''
+
+
+def remove_url(text: str, url: str) -> str:
+    pattern = r'<\s*' + re.escape(url) + r'\s*>'
+    return re.sub(pattern, '', text).strip()
+
+
+def split_lines_by_indices(lines: list, indices: list) -> list:
+    split_indices = [0] + [i for i in indices]
+    return [lines[start:end] for start, end in zip(split_indices, split_indices[1:] + [None])]
+
+
+def convert_string_to_json(s: str) -> dict:
     lines = [line for line in s.splitlines() if line.strip()]
-    sections = dict()
-    sections['category'] = ''
-    sections['content'] = []
+    sections = {'category': '', 'content': []}
 
-    heading_index = 0
-    for index, line in enumerate(lines):
-        if re.match(r'.* News$', line.strip(), flags=re.IGNORECASE):
-            sections['category'] = line
-            heading_index = index
-    del lines[heading_index]
+    heading_index = next(
+        (index for index, line in enumerate(lines) if re.match(r'.* News$', line.strip(), flags=re.IGNORECASE)), -1
+    )
+    if heading_index != -1:
+        sections['category'] = lines[heading_index]
+        del lines[heading_index]
 
-    source_indices = []
-    for index, line in enumerate(lines):
-        if re.match(r'[(（].*?[)）].*?\d{4}$', line.strip()):
-            source_indices.append(index)
+    source_pattern = r'[(（].*?[)）].*?\d{4}$'
+    source_indices = [index for index, line in enumerate(lines) if re.match(source_pattern, line.strip())]
+
     if source_indices:
         previous_indices = [i - 1 for i in source_indices if i - 1 >= 0]
-        split_indices = [0] + [i for i in previous_indices]
-        split_lines = [lines[start:end] for start, end in zip(split_indices, split_indices[1:] + [None])]
+        split_lines = split_lines_by_indices(lines, previous_indices)
         for sublist in split_lines:
             if not sublist:
                 continue
-            source_indices = [index for index, line in enumerate(sublist) if
-                              re.match(r'[(（].*?[)）].*?\d{4}$', line.strip())]
-            if not source_indices:
-                content = sublist
-                sections['content'].append({'content': '\n'.join(content)})
+
+            source_index = next(
+                (index for index, line in enumerate(sublist) if re.match(source_pattern, line.strip())), -1
+            )
+            if source_index == -1:
+                sections['content'].append({'summary': '\n'.join([line for line in sublist if line.strip()])})
             else:
-                source_index = source_indices[0]
                 title = sublist[:source_index]
-                source = sublist[source_index]
-                content = sublist[source_index + 1:]
-                sections['content'].append(
-                    {'title': '\n'.join(title), 'source': source, 'content': '\n'.join(content)})
+                title_str = '\n'.join([line for line in title if line.strip()])
+
+                source = sublist[source_index].strip()
+                summary = sublist[source_index + 1:]
+
+                url = extract_url(title_str)
+                title_str_en = ''
+
+                if url:
+                    title_str = remove_url(title_str, url)
+                    summary_without_title = []
+                    for line in summary:
+                        if is_url_in(line, url):
+                            title_str_en = remove_url(line, url)
+                        else:
+                            summary_without_title.append(line)
+                    summary = summary_without_title
+                    url = decode_ppv3(url)
+
+                summary_str = '\n'.join([line for line in summary if line.strip()])
+
+                sections['content'].append({
+                    'title': {'cn': title_str, 'en': title_str_en},
+                    'source': source,
+                    'url': url,
+                    'summary': {'en': summary_str}
+                })
     else:
-        sections['content'] = '\n'.join(lines)
+        sections['content'] = '\n'.join([line for line in lines if line.strip()])
 
     return sections
 
