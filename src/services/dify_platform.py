@@ -54,7 +54,7 @@ class DifyPlatform(object):
                 break
         return dataset_id
 
-    def download_images_to_local(self, image_uuids: list):
+    def download_images_to_local(self, image_uuids: list, skip_if_exists=False):
         if self.dify_db is None:
             raise Exception('Dify database is not set')
         image_paths = {}
@@ -62,8 +62,14 @@ class DifyPlatform(object):
             image_path_in_dify = self.dify_db.get_image_path(uuid)
             if image_path_in_dify is None:
                 continue
-            if self.s3.find_and_download_file(str(image_path_in_dify.as_posix()), config.image_dir_path):
-                image_path = config.image_dir_path / image_path_in_dify.name
+            image_path = config.image_dir_path / image_path_in_dify.name
+            if skip_if_exists and image_path.exists():
+                print(f'skip downloading image "{image_path_in_dify.name}" as it already exists')
+                image_paths[uuid] = image_path
+                continue
+            if self.s3.find_and_download_file(
+                    str(image_path_in_dify.as_posix()), config.image_dir_path, skip_if_exists
+            ):
                 image_paths[uuid] = image_path
         return image_paths
 

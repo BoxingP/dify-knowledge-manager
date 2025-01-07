@@ -29,9 +29,12 @@ class S3Handler(object):
             return []
         return [file['Key'] for file in response.get('Contents', [])]
 
-    def find_and_download_file(self, file, local_dir):
+    def find_and_download_file(self, file, local_dir, skip_if_exists=False):
         files = self.list_files(file)
         if file in files:
+            local_file_path = Path(local_dir) / Path(file).name
+            if skip_if_exists and local_file_path.exists():
+                return True
             self.download_file(file, local_dir)
             return True
         return False

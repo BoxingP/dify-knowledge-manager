@@ -41,7 +41,7 @@ def replace_images_in_target_knowledge_base_documents(source_dify, target_dify, 
         source_docs_with_images = list(filter(lambda item: item['image'], source_docs))
         if source_docs_with_images:
             images = [image for item in source_docs_with_images for image in item['image']]
-            local_images = source_dify.download_images_to_local(images)
+            local_images = source_dify.download_images_to_local(images, skip_if_exists=True)
             docs_with_images = [
                 {'id': doc['id'], 'image': [local_images[uuid] for uuid in doc['image'] if uuid in local_images]} for
                 doc in source_docs_with_images if 'id' in doc and 'image' in doc]
