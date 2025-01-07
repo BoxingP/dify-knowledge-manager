@@ -1,13 +1,5 @@
 import json
-import random
 import re
-import time
-import uuid
-from pathlib import Path
-
-from PIL import Image
-from docx import Document
-from docx.image.exceptions import UnrecognizedImageError
 
 from src.api.app_api import AppApi
 from src.api.dataset_api import DatasetApi
@@ -74,70 +66,6 @@ class DifyPlatform(object):
                 image_path = config.image_dir_path / image_path_in_dify.name
                 image_paths[uuid] = image_path
         return image_paths
-
-    def convert_image_to_jpg(self, image_path: Path) -> Path:
-        jpg_image_path = config.convert_dir_path / Path(f'{image_path.stem}.jpg')
-        Image.open(image_path).convert('RGB').save(jpg_image_path)
-        return Path(jpg_image_path)
-
-    def add_images_to_document(self, images: list[Path], word_file: Path):
-        doc = Document()
-        for image in images:
-            try:
-                doc.add_picture(image.as_posix())
-            except UnrecognizedImageError:
-                jpg_image_path = self.convert_image_to_jpg(image)
-                doc.add_picture(jpg_image_path.as_posix())
-            doc.add_paragraph()
-        doc.save(word_file.as_posix())
-
-    def upload_images_as_word_documents(self, dataset, document_name, images, split_count=1,
-                                        current_split=1, max_split=5) -> list:
-        def split_list(lst, count):
-            k, m = divmod(len(lst), count)
-            return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(count)]
-
-        if current_split > max_split:
-            raise SplitCountExceeded(
-                f'Max split count of {max_split} exceeded for document {document_name} uploaded to {dataset.dataset_id}'
-            )
-
-        uploaded_documents = []
-        split_image_paths = split_list(images, split_count)
-        for batch_index, image_batch in enumerate(split_image_paths):
-            if image_batch:
-                word_file_path = config.word_dir_path / Path(f'{document_name}-{current_split}-{batch_index}.docx')
-                self.add_images_to_document(image_batch, word_file_path)
-                document_id = dataset.create_document_by_file(word_file_path)
-                if document_id is not None:
-                    uploaded_documents.append(document_id)
-                else:
-                    if len(image_batch) == 1:
-                        uploaded_documents.append('')
-                    else:
-                        uploaded_documents.extend(
-                            self.upload_images_as_word_documents(
-                                dataset, document_name, image_batch, split_count * 2, current_split + 1, max_split
-                            )
-                        )
-            time.sleep(random.uniform(1, 3))
-        return uploaded_documents
-
-    def upload_images_to_dify(self, images_path: list, dataset: KnowledgeBase, doc_name: str = uuid.uuid4()) -> dict:
-        images_mapping = {}
-
-        docs_with_images = self.upload_images_as_word_documents(dataset, doc_name, images_path)
-        images = []
-        for document_id in docs_with_images:
-            if document_id == '':
-                images.append('')
-            else:
-                document = dataset.fetch_documents('api', document_id=document_id, with_segment=True, with_image=True)
-                images.extend(document['image'])
-        images_mapping.update(dict(zip(images_path, images)))
-        dataset.delete_document(docs_with_images)
-
-        return images_mapping
 
     def fix_json_str(self, json_str):
         json_str = re.sub(r'^[^{]*', '', json_str)

@@ -81,7 +81,7 @@ class Config(object):
             f"{self.department.lower().replace(' ', '_')}_{export_config.get('file_name')}")
 
         erp_config = self.app_config.get('erp', {})
-        self.erp_file = getattr(self, 'upload_dir_path') / Path(erp_config.get('file_name', ''))
+        self.erp_dir = getattr(self, 'upload_dir_path') / Path(erp_config.get('dir', ''))
         self.erp_dataset = erp_config.get('dataset', '')
 
     def get_db_uri(self, database_name: str):
@@ -102,7 +102,8 @@ class Config(object):
         fields = base_fields + app_fields
 
         base_values = [os.getenv(f'{env}_API_SERVER'), os.getenv(f'{env}_DATASET_SECRET_KEY')]
-        app_values = [os.getenv(f'{env}_{app.replace(" ", "_").upper()}_APP_SECRET_KEY') for app in apps] if apps else []
+        app_values = [os.getenv(f'{env}_{app.replace(" ", "_").upper()}_APP_SECRET_KEY') for app in
+                      apps] if apps else []
         values = base_values + app_values
 
         if None in values:

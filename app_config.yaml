@@ -24,8 +24,8 @@ export:
   file_name: qa_info.xlsx
   department: Factory Quality Knowledge
 erp:
+  dir: erp
   dataset: ERP Knowledge Base
-  file_name: ERP FAQ Update - 20241024.docx
 mailboxes:
   - email:
     inbox:

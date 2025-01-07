@@ -1,16 +1,22 @@
+import re
+
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
+from src.utils.folder_handler import FolderHandler
 from src.utils.time_utils import timing
 
 
-def create_data_dict(name, segment_list):
+def create_documents_dict(name, segment_list):
     return {
         'name': name,
         'segment': [
             {
-                'content': f'# Question\n{segment["question"]}\n\n# Context\n{segment["context"]}\n\n# Answer\n{segment["answer"]}',
-                'keywords': [segment['context']],
+                'content':
+                    f'# Question\n{segment.get("question", "")}\n\n'
+                    f'# Context\n{segment.get("context", "")}\n\n'
+                    f'# Answer\n{segment.get("answer", "")}',
+                'keywords': re.split('[,，]', segment.get('context')) if segment.get('context') else [],
                 'enabled': True
             }
             for segment in segment_list
@@ -18,41 +24,61 @@ def create_data_dict(name, segment_list):
     }
 
 
-def get_data_list(segment_size: int = None):
-    qa_info = DocxHandler(config.erp_file).extract_qa_info()
-    if segment_size is None:
-        segment_size = len(qa_info)
-    data_list = []
-    segment_list = []
-    i = 1
-    file_name = config.erp_file.stem
-    file_extension = config.erp_file.suffix
+def extract_qa_info(text) -> list:
+    pattern = re.compile(
+        r'(question|context|answer)\s*[:：]\s*(.*?)(?=(question|context|answer)\s*[:：]|$)',
+        re.I | re.S
+    )
+    matches = pattern.findall(text)
 
-    for index, item in enumerate(qa_info):
-        segment_list.append(item)
-        if len(segment_list) == segment_size or (index == len(qa_info) - 1 and segment_list):
-            data_dict_name = f'{file_name}{file_extension}' \
-                if segment_size == len(qa_info) else f'{file_name}.{i}{file_extension}'
-            data_dict = create_data_dict(data_dict_name, segment_list)
-            data_list.append(data_dict)
-            segment_list = []
-            i += 1
+    qa_dicts = []
+    curr_dict = {}
 
-    return data_list
+    for match in matches:
+        key, value, _ = match
+        key = key.lower().strip()
+        value = value.strip().replace('_x000D_', '')
+        curr_dict[key] = value
+        if len(curr_dict) == 3:
+            qa_dicts.append(curr_dict)
+            curr_dict = {}
+    return qa_dicts
 
 
 @timing
-def upload_data_list(data_list):
-    upload_dify = DifyPlatform('dev')
-    kb_name = config.erp_dataset
-    kb = upload_dify.init_knowledge_base(kb_name)
-    kb.add_document(data_list, replace_listed=True)
+def get_erp_data(erp_dir, knowledge_base, segment_size: int = None) -> list:
+    erp_data = []
+    files = FolderHandler(path=erp_dir).get_files()
+    for file in files:
+        if file.suffix == '.docx':
+            handler = DocxHandler(file)
+            docx_content = handler.extract_content()
+            docx_content = handler.convert_to_str(
+                docx_content, image_reference_type='dify', knowledge_base=knowledge_base
+            )
+            qa_info = extract_qa_info(docx_content)
+            if segment_size is None:
+                segment_size = len(qa_info)
+            segment_list = []
+            i = 1
+            for index, item in enumerate(qa_info):
+                segment_list.append(item)
+                if len(segment_list) == segment_size or (index == len(qa_info) - 1 and segment_list):
+                    document_name = f'{file.stem}{file.suffix}' \
+                        if segment_size == len(qa_info) else f'{file.stem}.{i}{file.suffix}'
+                    documents_dict = create_documents_dict(document_name, segment_list)
+                    erp_data.append(documents_dict)
+                    segment_list = []
+                    i += 1
+
+    return erp_data
 
 
 def main():
-    data_list = get_data_list()
-    print('Data length:', len(data_list))
-    upload_data_list(data_list)
+    kb = DifyPlatform('dev').init_knowledge_base(dataset_name=config.erp_dataset)
+    erp_data = get_erp_data(config.erp_dir, kb)
+    print('ERP data length:', len(erp_data))
+    kb.add_document(erp_data, replace_listed=True)
 
 
 if __name__ == '__main__':

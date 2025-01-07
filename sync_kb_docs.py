@@ -47,9 +47,7 @@ def replace_images_in_target_knowledge_base_documents(source_dify, target_dify, 
                 doc in source_docs_with_images if 'id' in doc and 'image' in doc]
             target_images = {}
             for doc in docs_with_images:
-                images_path_to_id = target_dify.upload_images_to_dify(
-                    images_path=doc['image'], dataset=target_kb, doc_name=doc['id']
-                )
+                images_path_to_id = target_kb.upload_images(images_path=doc['image'], doc_name=doc['id'])
                 target_images.update(images_path_to_id)
             images_mapping = {k: target_images[v] for k, v in local_images.items()}
             if not images_mapping:

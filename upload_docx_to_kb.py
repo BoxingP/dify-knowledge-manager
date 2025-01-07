@@ -1,4 +1,3 @@
-import base64
 import datetime
 import re
 
@@ -6,9 +5,9 @@ import pandas as pd
 
 from src.database.crawl_database import CrawlDatabase
 from src.services.dify_platform import DifyPlatform
-from src.services.windows_share_folder import WindowsShareFolder
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
+from src.utils.folder_handler import FolderHandler
 from src.utils.time_utils import timing
 
 
@@ -26,53 +25,6 @@ def extract_release_date(text: str) -> str:
         return match.group(1)
     else:
         return ''
-
-
-def extract_content_as_str(document_df, image_dict=None, table_dict=None) -> str:
-    if image_dict is None:
-        image_dict = {}
-    if table_dict is None:
-        table_dict = {}
-
-    def process_row_content(row):
-        content = str(row['text']).strip()
-        if not content:
-            if pd.notna(row['image_id']) and str(row['image_id']).strip():
-                return image_dict.get(str(row['image_id']), '[image]')
-            if pd.notna(row['table_id']) and str(row['table_id']).strip():
-                return table_dict.get(str(row['table_id']), '[table]')
-            return ''
-        if row['style'].lower() == 'title':
-            content = f'Title: {content}'
-        content = re.sub(r"发布日期[:：]\s*", 'Release Date: ', content)
-        return content
-
-    return '\n'.join(filter(None, (process_row_content(row) for _, row in document_df.iterrows())))
-
-
-def process_images(dify, images, file_stem, kb):
-    images_dict = {}
-    if not images.empty:
-        image_paths = []
-        for _, row in images.iterrows():
-            img_data = base64.b64decode(row['image_base64_string'])
-            img_path = config.image_dir_path / f"{file_stem}.{row['image_id']}.{row['image_name']}.{row['image_type']}"
-            with open(img_path, 'wb') as f:
-                f.write(img_data)
-            image_paths.append(img_path)
-        images_path_to_id = dify.upload_images_to_dify(image_paths, kb, file_stem)
-        images_dict = {
-            str(index): f'\n![image](/files/{value}/file-preview)\n'
-            for index, (key, value) in enumerate(images_path_to_id.items())
-            if value
-        }
-    return images_dict
-
-
-def process_tables(tables):
-    if tables.empty:
-        return {}
-    return {str(index): value for index, value in tables[['table_id', 'table_string']].values}
 
 
 def get_first_non_empty_row(df, style: str):
@@ -93,8 +45,9 @@ def extract_document_info(document_df, document_str):
     if title is None:
         title = ''
     release_date = extract_release_date(document_str)
+    origin_link = extract_origin_link(document_str)
     document_name = f'{release_date}: {title}' if release_date else title
-    return document_name, release_date
+    return document_name, release_date, origin_link
 
 
 def add_document_to_kb(kb, document_name, document_str, response):
@@ -113,7 +66,7 @@ def add_document_to_kb(kb, document_name, document_str, response):
     return docs_name_id_mapping[document_name]
 
 
-def add_summary_to_kb(kb, document_name, release_date, response, document_id):
+def add_summary_to_kb(kb, document_name, release_date, origin_link, response, document_id):
     document = {
         'name': document_name,
         'segment': [
@@ -121,7 +74,8 @@ def add_summary_to_kb(kb, document_name, release_date, response, document_id):
                 'content': (
                     f'{document_id}\n'
                     f'{release_date}\n'
-                    f'{response.get("summary", "")}'
+                    f'{response.get("summary", "")}\n'
+                    f'{origin_link}'
                 ),
                 'answer': None,
                 'keywords': response.get('keywords', []),
@@ -138,25 +92,28 @@ def save_docx_file(dify, file):
 
 def process_file(dify, file, summary_kb, details_kb):
     file_path = file['path']
-    docx_file = DocxHandler(file_path)
-    docx_content = docx_file.read_content()
+
+    handler = DocxHandler(
+        file_path=file_path,
+        title_prefix='Title: ',
+        text_rules={r"发布日期[:：]\s*": "Release Date: "}
+    )
+
+    docx_content = handler.extract_content()
     document_df = docx_content.document
 
-    images_dict = process_images(dify, docx_content.image, docx_file.file_path.stem, details_kb)
-    tables_dict = process_tables(docx_content.table)
-
-    document_str = extract_content_as_str(document_df, images_dict, tables_dict)
+    document_str = handler.convert_to_str(docx_content, image_reference_type='dify', knowledge_base=details_kb)
     response = dify.analyze_content(dify.summary_api, document_str)
-    document_name, release_date = extract_document_info(document_df, document_str)
+    document_name, release_date, origin_link = extract_document_info(document_df, document_str)
 
     details_document_id = add_document_to_kb(details_kb, document_name, document_str, response)
-    add_summary_to_kb(summary_kb, document_name, release_date, response, details_document_id)
+    add_summary_to_kb(summary_kb, document_name, release_date, origin_link, response, details_document_id)
 
     save_docx_file(dify, file)
 
 
 @timing
-def upload_files_to_dify(dify, files):
+def upload_docx_files(dify, files):
     if files.empty:
         return
 
@@ -177,20 +134,20 @@ def get_first_day_of_month(year: int = None, month: int = None) -> int:
 
 
 @timing
-def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
+def get_docx_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
     if get_specific_documents:
         documents = CrawlDatabase('crawl').get_documents(get_first_day_of_month())
         include_files = documents['doc_name'].tolist()
     else:
         include_files = None
 
-    wsd = WindowsShareFolder(
+    wsd = FolderHandler(
         config.share_folder.path,
         config.share_folder.username,
         config.share_folder.password
     )
-    files_list = wsd.get_files_list(
-        include_subfolders=False,
+    files_list = wsd.get_files(
+        include_sub_dirs=False,
         file_type='docx',
         include_files=include_files,
         sort_alphabetical='desc'
@@ -228,12 +185,12 @@ def get_valid_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
 
 
 def main():
-    dify = DifyPlatform('sandbox', apps=['summary'])
-    print('Getting valid files...')
-    valid_files = get_valid_files(dify)
-    print(f'{len(valid_files)} valid files')
+    upload_platform = DifyPlatform(env='sandbox', apps=['summary'])
+    print('Getting valid .docx files...')
+    docx_files = get_docx_files(upload_platform)
+    print(f'{len(docx_files)} valid .docx files')
     print('Uploading files...')
-    upload_files_to_dify(dify, valid_files)
+    upload_docx_files(upload_platform, docx_files)
 
 
 if __name__ == '__main__':

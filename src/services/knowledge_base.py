@@ -1,12 +1,26 @@
+import random
 import re
 import time
+import uuid
+from pathlib import Path
+from typing import Union, Optional
+
+from PIL import Image
+from docx import Document
+from docx.image.exceptions import UnrecognizedImageError
 
 from src.api.dataset_api import DatasetApi
 from src.database.dify_database import DifyDatabase
 from src.database.record_database import RecordDatabase
+from src.utils.config import config
+from src.utils.time_utils import timing
 
 
 class IndexingNotCompletedError(Exception):
+    pass
+
+
+class SplitCountExceeded(Exception):
     pass
 
 
@@ -76,7 +90,7 @@ class KnowledgeBase(object):
         return None
 
     def _get_images_from_segments(self, segments):
-        pattern = r'!\[image\]\([^)]*/files/(.*?)/(?:image-preview|file-preview)\)'
+        pattern = r'(?:!\[image\])?\([^)]*/files/(.*?)/(?:image-preview|file-preview)\)'
         images = []
         for segment in segments:
             uuids = re.findall(pattern, segment['content'])
@@ -101,7 +115,8 @@ class KnowledgeBase(object):
         if with_image and 'segment' in document:
             document['image'] = self._get_images_from_segments(document['segment'])
 
-    def fetch_documents(self, source, document_id=None, with_segment=False, with_image=False, is_enabled: bool = None):
+    def fetch_documents(self, source, document_id=None, with_segment=False, with_image=False,
+                        is_enabled: bool = None) -> Optional[Union[dict, list[dict]]]:
         documents = self._fetch_all_documents(source, is_enabled)
         if documents is None or not documents:
             return None
@@ -124,6 +139,7 @@ class KnowledgeBase(object):
                     return document['id']
         return None
 
+    @timing
     def add_document(self, documents, replace_listed: bool = False, skip_listed: bool = False,
                      remove_unlisted: bool = False, sort_document: bool = False) -> dict:
         if isinstance(documents, dict):
@@ -205,3 +221,66 @@ class KnowledgeBase(object):
         documents = self.api.get_documents_in_dataset(self.dataset_id)
         for document in documents:
             self.api.delete_document(self.dataset_id, document['id'])
+
+    def upload_images(self, images_path: list, doc_name: str = uuid.uuid4()) -> dict:
+        images_mapping = {}
+
+        docs_with_images = self.upload_images_by_word_file(doc_name, images_path)
+        images = []
+        for document_id in docs_with_images:
+            if document_id == '':
+                images.append('')
+            else:
+                document = self.fetch_documents('api', document_id=document_id, with_segment=True, with_image=True)
+                images.extend(document['image'])
+        images_mapping.update(dict(zip(images_path, images)))
+        self.delete_document(docs_with_images)
+
+        return images_mapping
+
+    def upload_images_by_word_file(self, document_name, images, split_count=1, current_split=1, max_split=5) -> list:
+        def split_list(lst, count):
+            k, m = divmod(len(lst), count)
+            return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(count)]
+
+        if current_split > max_split:
+            raise SplitCountExceeded(
+                f'Max split count of {max_split} exceeded for document {document_name} uploaded to {self.dataset_name}'
+            )
+
+        uploaded_documents = []
+        split_image_paths = split_list(images, split_count)
+        for batch_index, image_batch in enumerate(split_image_paths):
+            if image_batch:
+                word_file_path = config.word_dir_path / Path(f'{document_name}-{current_split}-{batch_index}.docx')
+                self.add_images_to_word_file(image_batch, word_file_path)
+                document_id = self.create_document_by_file(word_file_path)
+                if document_id is not None:
+                    uploaded_documents.append(document_id)
+                else:
+                    if len(image_batch) == 1:
+                        uploaded_documents.append('')
+                    else:
+                        uploaded_documents.extend(
+                            self.upload_images_by_word_file(
+                                document_name, image_batch, split_count * 2, current_split + 1, max_split
+                            )
+                        )
+            time.sleep(random.uniform(1, 3))
+        return uploaded_documents
+
+    def add_images_to_word_file(self, images: list[Path], word_file: Path):
+        doc = Document()
+        for image in images:
+            try:
+                doc.add_picture(image.as_posix())
+            except UnrecognizedImageError:
+                jpg_image_path = self.convert_image_to_jpg(image)
+                doc.add_picture(jpg_image_path.as_posix())
+            doc.add_paragraph()
+        doc.save(word_file.as_posix())
+
+    def convert_image_to_jpg(self, image_path: Path) -> Path:
+        jpg_image_path = config.convert_dir_path / Path(f'{image_path.stem}.jpg')
+        Image.open(image_path).convert('RGB').save(jpg_image_path)
+        return Path(jpg_image_path)
