@@ -7,6 +7,8 @@ from urllib.parse import quote
 import yaml
 from dotenv import load_dotenv
 
+from src.utils.document_sync_config import DocumentSyncConfig
+
 
 class Config(object):
     _instance = None
@@ -131,8 +133,17 @@ class Config(object):
 
         return S3Config(access_key_id, secret_access_key, region, bucket)
 
-    def get_sync_mapping(self):
-        return self.app_config.get('sync', {}).get('mapping', {})
+    def get_doc_sync_config(self, scenario: str):
+        scenario_config = self.app_config.get('sync', {}).get(scenario, {})
+
+        return DocumentSyncConfig(
+            skip_existing=scenario_config.get('skip_existing'),
+            replace_existing=scenario_config.get('replace_existing'),
+            remove_extra=scenario_config.get('remove_extra'),
+            preserve_document_order=scenario_config.get('preserve_document_order'),
+            preserve_segment_order=scenario_config.get('preserve_segment_order'),
+            dataset_mapping=scenario_config.get('dataset_mapping', [])
+        )
 
     def get_mailbox(self) -> list:
         return self.app_config.get('mailboxes', [])

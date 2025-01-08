@@ -1,6 +1,7 @@
 from src.database.ab_database import AbDatabase
 from src.database.record_database import RecordDatabase
 from src.services.dify_platform import DifyPlatform
+from src.utils.config import config
 
 
 def generate_segment(row):
@@ -19,9 +20,9 @@ def update_agent_info(agent_info):
     dify = DifyPlatform('dev')
     kb_name = 'Agent pool'
     kb = dify.init_knowledge_base(kb_name)
-    kb.add_document(
-        {'name': 'agent_info', 'segment': agent_info.apply(generate_segment, axis=1).to_list()},
-        replace_listed=True
+    kb.sync_documents(
+        documents={'name': 'agent_info', 'segment': agent_info.apply(generate_segment, axis=1).to_list()},
+        sync_config=config.get_doc_sync_config(scenario='agent')
     )
 
 

@@ -62,7 +62,7 @@ def add_document_to_kb(kb, document_name, document_str, response):
             }
         ]
     }
-    docs_name_id_mapping = kb.add_document(document, replace_listed=True, sort_document=False)
+    docs_name_id_mapping = kb.sync_documents(document, sync_config=config.get_doc_sync_config(scenario='docx'))
     return docs_name_id_mapping[document_name]
 
 
@@ -83,7 +83,7 @@ def add_summary_to_kb(kb, document_name, release_date, origin_link, response, do
             }
         ]
     }
-    kb.add_document(document, replace_listed=True, sort_document=False)
+    kb.sync_documents(document, sync_config=config.get_doc_sync_config(scenario='docx'))
 
 
 def save_docx_file(dify, file):

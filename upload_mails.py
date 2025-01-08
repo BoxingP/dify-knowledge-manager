@@ -282,7 +282,7 @@ def record_mails(mails):
     record_db.save_mails(pd.DataFrame(mails), ignored_columns=['message_id'])
 
 
-def upload_mails_to_knowledge_base(env, mails_category: list, get_recent_updated: bool = None,
+def upload_mails_to_knowledge_base(env, mails_category: list, doc_sync_config: dict, get_recent_updated: bool = None,
                                    years: int = None, months: int = None, days: int = None):
     dify = DifyPlatform(env)
     record_db = RecordDatabase('record')
@@ -312,15 +312,16 @@ def upload_mails_to_knowledge_base(env, mails_category: list, get_recent_updated
                     mail_doc_ids_in_record = record_db.get_mail_related_document_ids(mail_id, kb.dataset_id)
                     doc_ids_to_remove = list(set(doc_ids_in_kb) & set(mail_doc_ids_in_record))
                     kb.delete_document(doc_ids_to_remove)
-                    docs_name_id_mapping = kb.add_document(mail.get('document'), replace_listed=True)
+                    docs_name_id_mapping = kb.sync_documents(mail.get('document'), doc_sync_config)
                     for document_id in [value for key, value in docs_name_id_mapping.items()]:
                         record_db.save_mail_document_mapping(mail_id, document_id, kb.dataset_id)
 
 
 def main():
+    doc_sync_config = config.get_doc_sync_config(scenario='mail')
     mails = get_mails(source='local')
     record_mails(mails)
-    upload_mails_to_knowledge_base('prod', ['china daily news'], True, 0, 0, 1)
+    upload_mails_to_knowledge_base('prod', ['china daily news'], doc_sync_config, True, 0, 0, 1)
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ from src.api.dataset_api import DatasetApi
 from src.database.dify_database import DifyDatabase
 from src.database.record_database import RecordDatabase
 from src.utils.config import config
+from src.utils.document_sync_config import DocumentSyncConfig
 from src.utils.time_utils import timing
 
 
@@ -140,55 +141,26 @@ class KnowledgeBase(object):
         return None
 
     @timing
-    def add_document(self, documents, replace_listed: bool = False, skip_listed: bool = False,
-                     remove_unlisted: bool = False, sort_document: bool = False) -> dict:
-        if isinstance(documents, dict):
-            documents = [documents]
-        elif not isinstance(documents, list):
-            raise ValueError("The 'documents' parameter must be either a dict or a list of dicts")
+    def sync_documents(self, documents: Union[dict, list[dict]], sync_config: DocumentSyncConfig) -> dict:
+        documents = self._handle_and_sort_text(documents, sync_config.preserve_document_order)
+        for doc in documents:
+            if 'segment' in doc:
+                doc['segment'] = self._handle_and_sort_text(doc['segment'], sync_config.preserve_segment_order)
 
-        if sort_document:
-            documents = sorted(documents, key=lambda x: x['position'])
+        current_documents, existing_ids, extra_ids = self._fetch_and_filter_current_documents(documents)
 
-        if replace_listed or remove_unlisted or skip_listed:
-            exist_documents = self.fetch_documents(source='db')
-            if exist_documents is None:
-                exist_documents = []
-            document_names = {document['name'].strip().lower() for document in documents}
-            listed_ids = [document['id'] for document in exist_documents
-                          if document['name'].strip().lower() in document_names]
-            unlisted_ids = [document['id'] for document in exist_documents
-                            if document['name'].strip().lower() not in document_names]
-            if replace_listed:
-                self.delete_document(listed_ids)
-            else:
-                if skip_listed:
-                    exist_document_names = {document['name'].strip().lower() for document in exist_documents}
-                    documents = [document for document in documents if
-                                 document['name'].strip().lower() not in exist_document_names]
-                    print(f'Skip {len(document_names) - len(documents)} existing documents')
-            if remove_unlisted:
-                self.delete_document(unlisted_ids)
+        if sync_config.skip_existing:
+            existing_doc_names = {doc['name'] for doc in current_documents if doc['id'] in existing_ids}
+            documents = [doc for doc in documents if doc['name'] not in existing_doc_names]
+            for doc_name in existing_doc_names:
+                print(f'Skip existing document: {doc_name}')
+        else:
+            if sync_config.replace_existing:
+                self.delete_document(existing_ids)
+        if sync_config.remove_extra:
+            self.delete_document(extra_ids)
 
-        docs_name_id_mapping = {}
-        for document in documents:
-            document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
-            self._wait_document_embedding(batch_id, document_id)
-            if 'segment' in document:
-                segments = document['segment']
-                if isinstance(segments, dict):
-                    segments = [segments]
-                elif sort_document:
-                    segments = sorted(document['segment'], key=lambda x: x['position'])
-                for segment in segments:
-                    segment_id = self.api.create_segment_in_document(self.dataset_id, document_id, segment)
-                    if not segment.get('enabled'):
-                        self.api.update_segment_in_document(
-                            self.dataset_id, document_id, segment_id, segment.get('content'), segment.get('answer'),
-                            segment.get('keywords'), False
-                        )
-            docs_name_id_mapping[document['name']] = document_id
-        return docs_name_id_mapping
+        return self.create_document_by_text(documents)
 
     def _wait_document_embedding(self, batch_id, document_id, status='completed', retry: int = 600):
         index = 0
@@ -284,3 +256,36 @@ class KnowledgeBase(object):
         jpg_image_path = config.convert_dir_path / Path(f'{image_path.stem}.jpg')
         Image.open(image_path).convert('RGB').save(jpg_image_path)
         return Path(jpg_image_path)
+
+    def _handle_and_sort_text(self, text: Union[dict, list[dict]], sort_text: bool) -> list[dict]:
+        if isinstance(text, dict):
+            text = [text]
+        elif not isinstance(text, list):
+            raise ValueError("The text must be either a dict or a list of dicts")
+        if sort_text and all('position' in item for item in text):
+            return sorted(text, key=lambda x: x['position'])
+        return text
+
+    def _fetch_and_filter_current_documents(self, documents):
+        current_documents = self.fetch_documents(source='db') or []
+        document_names = {document['name'] for document in documents}
+        existing_ids = [doc['id'] for doc in current_documents if doc['name'] in document_names]
+        extra_ids = [doc['id'] for doc in current_documents if doc['name'] not in document_names]
+        return current_documents, existing_ids, extra_ids
+
+    def create_document_by_text(self, documents: list[dict]) -> dict:
+        docs_name_id_mapping = {}
+        for document in documents:
+            document_id, batch_id = self.api.create_document(self.dataset_id, document['name'])
+            self._wait_document_embedding(batch_id, document_id)
+            if 'segment' in document:
+                segments = document['segment']
+                for segment in segments:
+                    segment_id = self.api.create_segment_in_document(self.dataset_id, document_id, segment)
+                    if not segment.get('enabled'):
+                        self.api.update_segment_in_document(
+                            self.dataset_id, document_id, segment_id, segment.get('content'), segment.get('answer'),
+                            segment.get('keywords'), False
+                        )
+            docs_name_id_mapping[document['name']] = document_id
+        return docs_name_id_mapping

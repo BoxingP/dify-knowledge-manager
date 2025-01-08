@@ -64,7 +64,7 @@ def worker(kb, queue):
     while not queue.empty():
         customer_chunk = queue.get()
         try:
-            kb.add_document([customer_chunk])
+            kb.sync_documents([customer_chunk], sync_config=config.get_doc_sync_config(scenario='file'))
             queue.task_done()
         except Exception as ex:
             print(f'An exception occurred: {ex}, re-querying...')

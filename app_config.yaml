@@ -7,9 +7,40 @@ paths:
     convert_dir: assets,image_files,converted
     upload_dir: upload
 sync:
-  mapping:
-    - source:
-      target:
+  default:
+    skip_existing: false
+    replace_existing: true
+    remove_extra: false
+    preserve_document_order: true
+    preserve_segment_order: true
+    dataset_mapping:
+  dataset:
+    skip_existing: false
+    replace_existing: true
+    remove_extra: false
+    preserve_document_order: true
+    preserve_segment_order: true
+    dataset_mapping:
+      - source:
+        target:
+  agent:
+    skip_existing: false
+    replace_existing: true
+    remove_extra: false
+    preserve_document_order: true
+    preserve_segment_order: true
+  file:
+    skip_existing: false
+    replace_existing: true
+    remove_extra: false
+    preserve_document_order: false
+    preserve_segment_order: false
+  mail:
+    skip_existing: false
+    replace_existing: true
+    remove_extra: false
+    preserve_document_order: false
+    preserve_segment_order: false
 upload:
   docx:
     dataset:

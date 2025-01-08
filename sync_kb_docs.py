@@ -14,29 +14,24 @@ def filter_documents(documents):
 
 
 @timing
-def sync_documents_to_target_knowledge_base(source_dify, target_dify, record_documents=True, source='api'):
-    for kb_mapping in config.get_sync_mapping():
-        source_kb = source_dify.init_knowledge_base(kb_mapping.get('source'))
-        target_kb = target_dify.init_knowledge_base(kb_mapping.get('target'))
-        source_documents = source_kb.fetch_documents(source=source, with_segment=True, is_enabled=True)
-        filtered_documents = filter_documents(source_documents)
-        print(
-            f"Fetching completed: {len(filtered_documents)} source files in dataset '{source_kb.dataset_name}' from '{source}'"
-        )
-        if filtered_documents:
-            target_kb.add_document(
-                filtered_documents, replace_listed=False, skip_listed=True, remove_unlisted=False, sort_document=True
-            )
-            if record_documents:
-                source_kb.record_knowledge_base_info()
-                source_kb.record_documents(filtered_documents)
+def sync_documents_to_target_knowledge_base(source_kb, target_kb, sync_config, source='api', record_documents=True):
+    source_documents = source_kb.fetch_documents(source=source, with_segment=True, is_enabled=True)
+    filtered_documents = filter_documents(source_documents)
+    print(
+        f"Fetching completed: {len(filtered_documents)} source files in dataset '{source_kb.dataset_name}' from '{source}'"
+    )
+    if filtered_documents:
+        target_kb.sync_documents(documents=filtered_documents, sync_config=sync_config)
+        if record_documents:
+            source_kb.record_knowledge_base_info()
+            source_kb.record_documents(filtered_documents)
 
 
 @timing
-def replace_images_in_target_knowledge_base_documents(source_dify, target_dify, source='db'):
-    for kb_mapping in config.get_sync_mapping():
-        source_kb = source_dify.init_knowledge_base(kb_mapping.get('source'))
-        target_kb = target_dify.init_knowledge_base(kb_mapping.get('target'))
+def replace_images_in_target_knowledge_base_documents(source_dify, target_dify, dataset_mapping, source='db'):
+    for mapping in dataset_mapping:
+        source_kb = source_dify.init_knowledge_base(mapping.get('source'))
+        target_kb = target_dify.init_knowledge_base(mapping.get('target'))
         source_docs = source_kb.fetch_documents(source=source, with_segment=True, with_image=True)
         source_docs_with_images = list(filter(lambda item: item['image'], source_docs))
         if source_docs_with_images:
@@ -65,10 +60,15 @@ def replace_images_in_target_knowledge_base_documents(source_dify, target_dify, 
 
 
 def main():
-    source_dify = DifyPlatform('prod')
-    target_dify = DifyPlatform('sandbox')
-    sync_documents_to_target_knowledge_base(source_dify, target_dify, source='db')
-    replace_images_in_target_knowledge_base_documents(source_dify, target_dify)
+    doc_sync_config = config.get_doc_sync_config(scenario='dataset')
+
+    source_dify = DifyPlatform('dev')
+    target_dify = DifyPlatform('dev')
+    for mapping in doc_sync_config.dataset_mapping:
+        source_kb = source_dify.init_knowledge_base(mapping.get('source'))
+        target_kb = target_dify.init_knowledge_base(mapping.get('target'))
+        sync_documents_to_target_knowledge_base(source_kb, target_kb, sync_config=doc_sync_config, source='db')
+    replace_images_in_target_knowledge_base_documents(source_dify, target_dify, doc_sync_config.dataset_mapping)
 
 
 if __name__ == '__main__':

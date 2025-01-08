@@ -78,7 +78,7 @@ def main():
     kb = DifyPlatform('dev').init_knowledge_base(dataset_name=config.erp_dataset)
     erp_data = get_erp_data(config.erp_dir, kb)
     print('ERP data length:', len(erp_data))
-    kb.add_document(erp_data, replace_listed=True)
+    kb.sync_documents(erp_data, sync_config=config.get_doc_sync_config(scenario='file'))
 
 
 if __name__ == '__main__':
