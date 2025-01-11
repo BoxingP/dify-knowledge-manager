@@ -86,6 +86,12 @@ class Config(object):
         self.erp_dir = getattr(self, 'upload_dir_path') / Path(erp_config.get('dir', ''))
         self.erp_dataset = erp_config.get('dataset', '')
 
+        self.jobs_dir = self._get_project_root() / 'src' / 'jobs'
+        browser_config = self.app_config.get('browser', {})
+        self.browser_headless_mode = browser_config.get('headless_mode')
+        self.browser_timeout = browser_config.get('timeout')
+        self.browser_types = browser_config.get('type')
+
     def get_db_uri(self, database_name: str):
         name = database_name.upper()
         adapter = os.getenv(f'{name}_DB_ADAPTER')

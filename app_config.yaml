@@ -6,6 +6,7 @@ paths:
     word_dir: assets,word_files
     convert_dir: assets,image_files,converted
     upload_dir: upload
+    download_dir: download
 sync:
   default:
     skip_existing: false
@@ -64,4 +65,11 @@ mailboxes:
       subfolders:
         - name: China Daily News
           category: china daily news
-          dataset: China Daily News Knowledge Base
+          dataset:
+            summary: China Daily News Summary
+            details: China Daily News Details
+browser:
+  headless_mode: true
+  timeout: 25
+  type:
+    - edge

@@ -9,6 +9,7 @@ from src.database.record_database import RecordDatabase
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 from src.utils.proofpoint_url_decoder import decode_ppv3
+from src.utils.web_scraper import scrape_web_page_content
 
 
 def get_sender_info(mail):
@@ -90,7 +91,8 @@ def get_kb_name_by_category(info, category):
 
 
 def extract_info(row):
-    segment = []
+    summary_segment = []
+    details_segment = []
     delimiter = '\n'
     for item in row['cleaned_body']:
         category = item['category']
@@ -102,7 +104,8 @@ def extract_info(row):
             date = re.search(r'(\d{1,2})/(\d{1,2})-(\d{4})', source)
             date_str = f'{date.group(3)}{date.group(2).zfill(2)}{date.group(1).zfill(2)}' if date else ''
             name = f'{date_str} - {category} - {news_source_str} - {title}'
-            segment.append(
+            summary = content["summary"]["cn"] if content["summary"]["cn"] else content["summary"]["en"]
+            summary_segment.append(
                 {
                     'content': (
                         f'# {name}{delimiter}{delimiter}'
@@ -111,7 +114,23 @@ def extract_info(row):
                         f'## date{delimiter}{date_str}{delimiter}{delimiter}'
                         f'## source{delimiter}{content["source"]}{delimiter}{delimiter}'
                         f'## url{delimiter}{content["url"]}{delimiter}{delimiter}'
-                        f'## summary{delimiter}{content["summary"]["en"]}'
+                        f'## summary{delimiter}{summary}'
+                    ),
+                    'answer': None,
+                    'keywords': [],
+                    'enabled': True
+                }
+            )
+            details_segment.append(
+                {
+                    'content': (
+                        f'# {name}{delimiter}{delimiter}'
+                        f'## category{delimiter}{category.lower()}{delimiter}{delimiter}'
+                        f'## title{delimiter}{title}{delimiter}{delimiter}'
+                        f'## date{delimiter}{date_str}{delimiter}{delimiter}'
+                        f'## source{delimiter}{content["source"]}{delimiter}{delimiter}'
+                        f'## url{delimiter}{content["url"]}{delimiter}{delimiter}'
+                        f'## details{delimiter}{content["details"]}'
                     ),
                     'answer': None,
                     'keywords': [],
@@ -119,11 +138,19 @@ def extract_info(row):
                 }
             )
 
-    document = {
+    summary_document = {
         'name': f'{row["subject"]} - {row["sent_on"][:4]}',
-        'segment': segment
+        'segment': summary_segment
     }
-    return {'mail_id': row['id'], 'dataset': config.get_dataset_by_category(row['category']), 'document': document}
+    details_document = {
+        'name': f'{row["subject"]} - {row["sent_on"][:4]}',
+        'segment': details_segment
+    }
+    return {
+        'mail_id': row['id'],
+        'dataset': config.get_dataset_by_category(row['category']),
+        'document': {'summary': summary_document, 'details': details_document}
+    }
 
 
 def get_mails(source) -> list:
@@ -234,6 +261,8 @@ def convert_string_to_json(s: str) -> dict:
                 url = extract_url(title_str)
                 title_str_en = ''
 
+                summary_cn = ''
+                details = ''
                 if url:
                     title_str = remove_url(title_str, url)
                     summary_without_title = []
@@ -244,6 +273,7 @@ def convert_string_to_json(s: str) -> dict:
                             summary_without_title.append(line)
                     summary = summary_without_title
                     url = decode_ppv3(url)
+                    summary_cn, details = scrape_web_page_content(url)
 
                 summary_str = '\n'.join([line for line in summary if line.strip()])
 
@@ -251,7 +281,8 @@ def convert_string_to_json(s: str) -> dict:
                     'title': {'cn': title_str, 'en': title_str_en},
                     'source': source,
                     'url': url,
-                    'summary': {'en': summary_str}
+                    'summary': {'en': summary_str, 'cn': summary_cn},
+                    'details': details
                 })
     else:
         sections['content'] = '\n'.join([line for line in lines if line.strip()])
@@ -293,10 +324,33 @@ def upload_mails_to_knowledge_base(env, mails_category: list, doc_sync_config: d
         info = mails.apply(extract_info, axis=1).tolist()
         grouped_info = defaultdict(list)
         for item in info:
-            dataset = item['dataset']
+            dataset = item['dataset'].get('summary')
             document = {
                 'mail_id': item['mail_id'],
-                'document': item['document']
+                'document': item['document'].get('summary')
+            }
+            grouped_info[dataset].append(document)
+            dataset_mails_mapping = [
+                {'dataset_object': dify.init_knowledge_base(dataset), 'mails': mails}
+                for dataset, mails in grouped_info.items() if dataset is not None
+            ]
+            for item in dataset_mails_mapping:
+                kb = item.get('dataset_object')
+                documents_in_kb = kb.fetch_documents(source='api', with_segment=False)
+                doc_ids_in_kb = [document['id'] for document in documents_in_kb]
+                for mail in item.get('mails'):
+                    mail_id = mail.get('mail_id')
+                    mail_doc_ids_in_record = record_db.get_mail_related_document_ids(mail_id, kb.dataset_id)
+                    doc_ids_to_remove = list(set(doc_ids_in_kb) & set(mail_doc_ids_in_record))
+                    kb.delete_document(doc_ids_to_remove)
+                    docs_name_id_mapping = kb.sync_documents(mail.get('document'), doc_sync_config)
+                    for document_id in [value for key, value in docs_name_id_mapping.items()]:
+                        record_db.save_mail_document_mapping(mail_id, document_id, kb.dataset_id)
+        for item in info:
+            dataset = item['dataset'].get('details')
+            document = {
+                'mail_id': item['mail_id'],
+                'document': item['document'].get('details')
             }
             grouped_info[dataset].append(document)
             dataset_mails_mapping = [
@@ -321,7 +375,7 @@ def main():
     doc_sync_config = config.get_doc_sync_config(scenario='mail')
     mails = get_mails(source='local')
     record_mails(mails)
-    upload_mails_to_knowledge_base('prod', ['china daily news'], doc_sync_config, True, 0, 0, 1)
+    upload_mails_to_knowledge_base('dev', ['china daily news'], doc_sync_config, True, 0, 0, 1)
 
 
 if __name__ == '__main__':
