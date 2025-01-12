@@ -4,6 +4,7 @@ from collections import defaultdict
 
 import pandas as pd
 import win32com.client
+from dateutil.relativedelta import relativedelta
 
 from src.database.record_database import RecordDatabase
 from src.services.dify_platform import DifyPlatform
@@ -309,73 +310,72 @@ def record_mails(mails):
             mail['id'] = mail_id
         else:
             mail['id'] = str(uuid.uuid4())
-        mail['cleaned_body'] = convert_text_to_structured_list(mail['body'])
-    record_db.save_mails(pd.DataFrame(mails), ignored_columns=['message_id'])
+    record_db.save_mails(pd.DataFrame(mails), ignored_columns=['message_id', 'cleaned_body'])
 
 
-def upload_mails_to_knowledge_base(env, mails_category: list, doc_sync_config: dict, get_recent_updated: bool = None,
-                                   years: int = None, months: int = None, days: int = None):
+def process_mails():
+    record_db = RecordDatabase('record')
+    mails = record_db.get_mails(get_recent_updated=True, time_delta=relativedelta(days=1), sort_order='asc')
+    for index, row in mails.iterrows():
+        row['cleaned_body'] = convert_text_to_structured_list(row['body'])
+        record_db.save_mails(pd.DataFrame([row]), ignored_columns=['message_id'])
+
+
+def process_info(info, key: str, dify, record_db, doc_sync_config, source):
+    info_dict = defaultdict(list)
+    for item in info:
+        dataset = item['dataset'].get(key)
+        document = {
+            'mail_id': item['mail_id'],
+            'document': item['document'].get(key)
+        }
+        info_dict[dataset].append(document)
+    dataset_mails_mapping = [
+        {'dataset_object': dify.init_knowledge_base(dataset), 'mails': mails}
+        for dataset, mails in info_dict.items() if dataset is not None
+    ]
+    for item in dataset_mails_mapping:
+        kb = item.get('dataset_object')
+        documents_in_kb = kb.fetch_documents(source=source, with_segment=False)
+        doc_ids_in_kb = [document['id'] for document in documents_in_kb] if documents_in_kb is not None else []
+        for mail in item.get('mails'):
+            mail_id = mail.get('mail_id')
+            mail_doc_ids_in_record = record_db.get_mail_related_document_ids(mail_id, kb.dataset_id)
+            doc_ids_to_remove = list(set(doc_ids_in_kb) & set(mail_doc_ids_in_record))
+            kb.delete_document(doc_ids_to_remove)
+            docs_name_id_mapping = kb.sync_documents(mail.get('document'), doc_sync_config)
+            for document_id in [value for key, value in docs_name_id_mapping.items()]:
+                record_db.save_mail_document_mapping(mail_id, document_id, kb.dataset_id)
+
+
+def upload_mails_to_knowledge_base(env, mails_category: list, doc_sync_config: dict, sync_summary: bool = True,
+                                   sync_details: bool = True, get_recent_updated: bool = None,
+                                   time_delta: relativedelta = None):
     dify = DifyPlatform(env)
     record_db = RecordDatabase('record')
-    mails = record_db.get_mails(
-        mails_category, get_recent_updated=get_recent_updated, years=years, months=months, days=days
-    )
+    mails = record_db.get_mails(mails_category, get_recent_updated=get_recent_updated, time_delta=time_delta)
     if not mails.empty:
         info = mails.apply(extract_info, axis=1).tolist()
-        grouped_info = defaultdict(list)
-        for item in info:
-            dataset = item['dataset'].get('summary')
-            document = {
-                'mail_id': item['mail_id'],
-                'document': item['document'].get('summary')
-            }
-            grouped_info[dataset].append(document)
-            dataset_mails_mapping = [
-                {'dataset_object': dify.init_knowledge_base(dataset), 'mails': mails}
-                for dataset, mails in grouped_info.items() if dataset is not None
-            ]
-            for item in dataset_mails_mapping:
-                kb = item.get('dataset_object')
-                documents_in_kb = kb.fetch_documents(source='api', with_segment=False)
-                doc_ids_in_kb = [document['id'] for document in documents_in_kb]
-                for mail in item.get('mails'):
-                    mail_id = mail.get('mail_id')
-                    mail_doc_ids_in_record = record_db.get_mail_related_document_ids(mail_id, kb.dataset_id)
-                    doc_ids_to_remove = list(set(doc_ids_in_kb) & set(mail_doc_ids_in_record))
-                    kb.delete_document(doc_ids_to_remove)
-                    docs_name_id_mapping = kb.sync_documents(mail.get('document'), doc_sync_config)
-                    for document_id in [value for key, value in docs_name_id_mapping.items()]:
-                        record_db.save_mail_document_mapping(mail_id, document_id, kb.dataset_id)
-        for item in info:
-            dataset = item['dataset'].get('details')
-            document = {
-                'mail_id': item['mail_id'],
-                'document': item['document'].get('details')
-            }
-            grouped_info[dataset].append(document)
-            dataset_mails_mapping = [
-                {'dataset_object': dify.init_knowledge_base(dataset), 'mails': mails}
-                for dataset, mails in grouped_info.items() if dataset is not None
-            ]
-            for item in dataset_mails_mapping:
-                kb = item.get('dataset_object')
-                documents_in_kb = kb.fetch_documents(source='api', with_segment=False)
-                doc_ids_in_kb = [document['id'] for document in documents_in_kb]
-                for mail in item.get('mails'):
-                    mail_id = mail.get('mail_id')
-                    mail_doc_ids_in_record = record_db.get_mail_related_document_ids(mail_id, kb.dataset_id)
-                    doc_ids_to_remove = list(set(doc_ids_in_kb) & set(mail_doc_ids_in_record))
-                    kb.delete_document(doc_ids_to_remove)
-                    docs_name_id_mapping = kb.sync_documents(mail.get('document'), doc_sync_config)
-                    for document_id in [value for key, value in docs_name_id_mapping.items()]:
-                        record_db.save_mail_document_mapping(mail_id, document_id, kb.dataset_id)
+        if sync_summary:
+            process_info(info, 'summary', dify, record_db, doc_sync_config, source='db')
+        if sync_details:
+            process_info(info, 'details', dify, record_db, doc_sync_config, source='db')
 
 
 def main():
     doc_sync_config = config.get_doc_sync_config(scenario='mail')
     mails = get_mails(source='local')
     record_mails(mails)
-    upload_mails_to_knowledge_base('dev', ['china daily news'], doc_sync_config, True, 0, 0, 1)
+    process_mails()
+    upload_mails_to_knowledge_base(
+        env='dev',
+        mails_category=['china daily news'],
+        doc_sync_config=doc_sync_config,
+        sync_summary=True,
+        sync_details=True,
+        get_recent_updated=True,
+        time_delta=relativedelta(days=1)
+    )
 
 
 if __name__ == '__main__':

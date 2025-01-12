@@ -4,7 +4,7 @@ import uuid
 import pandas as pd
 import psycopg2
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import update, func, or_
+from sqlalchemy import update, func, or_, desc, asc
 from sqlalchemy.exc import ProgrammingError
 
 from src.database.database import Database, database_session
@@ -234,7 +234,8 @@ class RecordDatabase(Database):
                 df[column] = df[column].astype(str)
         return df
 
-    def get_mails(self, categories: list = None, get_recent_updated=False, years=0, months=0, days=0):
+    def get_mails(self, categories: list = None, get_recent_updated: bool = False, time_delta: relativedelta = None,
+                  sort_order: str = None):
         with database_session(self.session) as session:
             table = Mails
             query = session.query(table)
@@ -242,12 +243,13 @@ class RecordDatabase(Database):
                 query = query.filter(func.lower(table.category).in_([category.lower() for category in categories]))
             if get_recent_updated:
                 now = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8)))
-                if years or months or days:
-                    days_ago = now - relativedelta(years=years, months=months, days=days)
-                else:
-                    days_ago = now
-                query = query.filter(or_(table.created_on >= days_ago, table.updated_on >= days_ago))
+                ago = now - time_delta
+                query = query.filter(or_(table.created_on >= ago, table.updated_on >= ago))
 
+            if sort_order == 'asc':
+                query = query.order_by(asc(table.sent_on))
+            elif sort_order == 'desc':
+                query = query.order_by(desc(table.sent_on))
             results = query.all()
             df = pd.DataFrame(
                 [{column: getattr(x, column) for column in table.__table__.columns.keys()} for x in results])
