@@ -92,59 +92,50 @@ def get_kb_name_by_category(info, category):
 
 
 def extract_info(row):
+    delimiter = '\n'
+
+    def create_segment(category, content, summary=True):
+        title = content['title']['cn']
+        source = content['source']
+        date = re.search(r'(\d{1,2})/(\d{1,2})-(\d{4})', source)
+        date_str = f'{date.group(3)}{date.group(2).zfill(2)}{date.group(1).zfill(2)}' if date else ''
+
+        if summary:
+            summary_content = content['summary']['cn'] if content['summary']['cn'] else content['summary']['en']
+            content_field = f'# summary{delimiter}{summary_content}'
+        else:
+            content_field = f'# details{delimiter}{content["details"]}'
+
+        return {
+            'content': (
+                f'# category{delimiter}{category.lower()}{delimiter}{delimiter}'
+                f'# title{delimiter}{title}{delimiter}{delimiter}'
+                f'# date{delimiter}{date_str}{delimiter}{delimiter}'
+                f'# source{delimiter}{source}{delimiter}{delimiter}'
+                f'# url{delimiter}{content["url"]}{delimiter}{delimiter}'
+                f'{content_field}'
+            ),
+            'answer': None,
+            'keywords': [],
+            'enabled': True
+        }
+
     summary_segment = []
     details_segment = []
-    delimiter = '\n'
     for item in row['cleaned_body']:
         category = item['category']
         for content in item['content']:
-            title = content['title']['cn']
-            source = content['source']
-            news_source = re.search(r'[（(](.*?)[)）]\s*\d', source)
-            news_source_str = news_source.group(1) if news_source else ''
-            date = re.search(r'(\d{1,2})/(\d{1,2})-(\d{4})', source)
-            date_str = f'{date.group(3)}{date.group(2).zfill(2)}{date.group(1).zfill(2)}' if date else ''
-            name = f'{date_str} - {category} - {news_source_str} - {title}'
-            summary = content["summary"]["cn"] if content["summary"]["cn"] else content["summary"]["en"]
-            summary_segment.append(
-                {
-                    'content': (
-                        f'# {name}{delimiter}{delimiter}'
-                        f'## category{delimiter}{category.lower()}{delimiter}{delimiter}'
-                        f'## title{delimiter}{title}{delimiter}{delimiter}'
-                        f'## date{delimiter}{date_str}{delimiter}{delimiter}'
-                        f'## source{delimiter}{content["source"]}{delimiter}{delimiter}'
-                        f'## url{delimiter}{content["url"]}{delimiter}{delimiter}'
-                        f'## summary{delimiter}{summary}'
-                    ),
-                    'answer': None,
-                    'keywords': [],
-                    'enabled': True
-                }
-            )
-            details_segment.append(
-                {
-                    'content': (
-                        f'# {name}{delimiter}{delimiter}'
-                        f'## category{delimiter}{category.lower()}{delimiter}{delimiter}'
-                        f'## title{delimiter}{title}{delimiter}{delimiter}'
-                        f'## date{delimiter}{date_str}{delimiter}{delimiter}'
-                        f'## source{delimiter}{content["source"]}{delimiter}{delimiter}'
-                        f'## url{delimiter}{content["url"]}{delimiter}{delimiter}'
-                        f'## details{delimiter}{content["details"]}'
-                    ),
-                    'answer': None,
-                    'keywords': [],
-                    'enabled': True
-                }
-            )
+            summary_segment.append(create_segment(category, content, summary=True))
+            details_segment.append(create_segment(category, content, summary=False))
+
+    document_name = f'{row["subject"]} - {row["sent_on"][:4]}'
 
     summary_document = {
-        'name': f'{row["subject"]} - {row["sent_on"][:4]}',
+        'name': document_name,
         'segment': summary_segment
     }
     details_document = {
-        'name': f'{row["subject"]} - {row["sent_on"][:4]}',
+        'name': document_name,
         'segment': details_segment
     }
     return {
