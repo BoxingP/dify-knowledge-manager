@@ -304,11 +304,30 @@ def record_mails(mails):
     record_db.save_mails(pd.DataFrame(mails), ignored_columns=['message_id', 'cleaned_body'])
 
 
-def process_mails():
+def proces_content(content):
+    try:
+        if content.get('url'):
+            summary = content.get('summary', {})
+            if not summary.get('cn') or not content.get('details'):
+                summary_cn, details = scrape_web_page_content(content['url'])
+                if not summary.get('cn'):
+                    summary['cn'] = summary_cn
+                if not content.get('details'):
+                    content['details'] = details
+    except KeyError:
+        print('Key not found in content')
+    return content
+
+
+def process_mails(time_delta, force_convert: bool = False):
     record_db = RecordDatabase('record')
-    mails = record_db.get_mails(get_recent_updated=True, time_delta=relativedelta(days=1), sort_order='asc')
+    mails = record_db.get_mails(get_recent_updated=True, time_delta=time_delta, sort_order='asc')
     for index, row in mails.iterrows():
-        row['cleaned_body'] = convert_text_to_structured_list(row['body'])
+        if force_convert or (not row['cleaned_body']):
+            row['cleaned_body'] = convert_text_to_structured_list(row['body'])
+        else:
+            for item in row['cleaned_body']:
+                item['content'] = [proces_content(content) for content in item['content']]
         record_db.save_mails(pd.DataFrame([row]), ignored_columns=['message_id'])
 
 
@@ -357,7 +376,8 @@ def main():
     doc_sync_config = config.get_doc_sync_config(scenario='mail')
     mails = get_mails(source='local')
     record_mails(mails)
-    process_mails()
+    time_delta = relativedelta(days=1)
+    process_mails(time_delta=time_delta, force_convert=False)
     upload_mails_to_knowledge_base(
         env='dev',
         mails_category=['china daily news'],
@@ -365,7 +385,7 @@ def main():
         sync_summary=True,
         sync_details=True,
         get_recent_updated=True,
-        time_delta=relativedelta(days=1)
+        time_delta=time_delta
     )
 
 
