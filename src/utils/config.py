@@ -2,6 +2,7 @@ import datetime
 import os
 from collections import namedtuple
 from pathlib import Path
+from typing import Optional
 from urllib.parse import quote
 
 import yaml
@@ -92,6 +93,10 @@ class Config(object):
         self.browser_timeout = browser_config.get('timeout')
         self.browser_types = browser_config.get('type')
 
+        keywords_config = self.app_config.get('keywords', {})
+        self.keywords_datasets = keywords_config.get('datasets', [])
+        self.keywords_documents = keywords_config.get('documents', [])
+
     def get_db_uri(self, database_name: str):
         name = database_name.upper()
         adapter = os.getenv(f'{name}_DB_ADAPTER')
@@ -102,17 +107,21 @@ class Config(object):
         database_name = os.getenv(f'{name}_DB_NAME')
         return f'{adapter}://{user}:%s@{host}:{port}/{database_name}' % quote(password)
 
-    def get_api_config(self, env, apps: list = None):
+    def get_api_config(self, env: str, apps: Optional[list[str]] = None, include_dataset: bool = False):
         env = env.upper()
 
-        base_fields = ['url', 'dataset_token']
-        app_fields = [f'{app.replace(" ", "_")}_app_token' for app in apps] if apps else []
-        fields = base_fields + app_fields
+        fields = ['url']
+        values = [os.getenv(f'{env}_API_SERVER')]
 
-        base_values = [os.getenv(f'{env}_API_SERVER'), os.getenv(f'{env}_DATASET_SECRET_KEY')]
-        app_values = [os.getenv(f'{env}_{app.replace(" ", "_").upper()}_APP_SECRET_KEY') for app in
-                      apps] if apps else []
-        values = base_values + app_values
+        if include_dataset:
+            fields.append('dataset_token')
+            values.append(os.getenv(f'{env}_DATASET_SECRET_KEY'))
+
+        if apps:
+            for app in apps:
+                app_field = f'{app.replace(" ", "_")}_app_token'
+                fields.append(app_field)
+                values.append(os.getenv(f'{env}_{app.replace(" ", "_").upper()}_APP_SECRET_KEY'))
 
         if None in values:
             missing_vars = [var for var, value in zip(fields, values) if value is None]

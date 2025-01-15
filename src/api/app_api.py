@@ -18,8 +18,8 @@ class AppApi(Api):
                 return True
         return False
 
-    def query_ai_agent(self, query, user='python.script', conversation_id='', stream: bool = True,
-                       max_attempt=3, backoff_factor=1):
+    def query_app(self, query, user='python.script', conversation_id='', stream: bool = True,
+                  max_attempt=3, backoff_factor=1):
         headers = {'Content-Type': 'application/json'}
         data = {
             'inputs': {},

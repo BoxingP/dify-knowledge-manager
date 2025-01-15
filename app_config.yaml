@@ -73,3 +73,7 @@ browser:
   timeout: 25
   type:
     - edge
+keywords:
+  datasets:
+    - 'Finance Knowledge Base'
+  documents: [ ]

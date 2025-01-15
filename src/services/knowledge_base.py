@@ -133,10 +133,10 @@ class KnowledgeBase(object):
                 self._process_document(document, source, with_segment, with_image)
             return documents
 
-    def _get_document_id_by_name(self, name, documents):
+    def get_document_id_by_name(self, name, documents):
         if documents is not None:
             for document in documents:
-                if document['name'].strip().lower() == name.strip().lower():
+                if document['name'] == name:
                     return document['id']
         return None
 
@@ -186,8 +186,15 @@ class KnowledgeBase(object):
                 self.api.delete_document(self.dataset_id, document_id)
 
     def update_segment_in_document(self, segment):
-        self.api.update_segment_in_document(self.dataset_id, segment['document_id'], segment['id'], segment['content'],
-                                            segment['answer'], segment['keywords'], True)
+        self.api.update_segment_in_document(
+            self.dataset_id,
+            segment['document_id'],
+            segment['id'],
+            segment['content'],
+            segment['answer'],
+            segment['keywords'],
+            segment.get('enabled', True)
+        )
 
     def empty_dataset(self):
         documents = self.api.get_documents_in_dataset(self.dataset_id)

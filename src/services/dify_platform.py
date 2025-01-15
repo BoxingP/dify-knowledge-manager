@@ -1,5 +1,6 @@
-import json
 import re
+from types import SimpleNamespace
+from typing import Optional
 
 from src.api.app_api import AppApi
 from src.api.dataset_api import DatasetApi
@@ -7,6 +8,7 @@ from src.database.dify_database import DifyDatabase
 from src.database.record_database import RecordDatabase
 from src.services.knowledge_base import KnowledgeBase
 from src.services.s3_handler import S3Handler
+from src.services.studio import Studio
 from src.utils.config import config
 
 
@@ -15,15 +17,19 @@ class SplitCountExceeded(Exception):
 
 
 class DifyPlatform(object):
-    def __init__(self, env: str, apps: list = None):
+    def __init__(self, env: str, apps: Optional[list[str]] = None, include_dataset: bool = True):
         self.env = env.upper()
-        self.api_config = config.get_api_config(self.env, apps)
+        self.api_config = config.get_api_config(self.env, apps, include_dataset=include_dataset)
+
+        self.studios = SimpleNamespace()
         if apps is not None:
             for app in apps:
                 app_token = getattr(self.api_config, f'{app}_app_token')
-                setattr(self, f'{app}_api', AppApi(self.api_config.url, app_token))
-        self.dataset_api = DatasetApi(self.api_config.url, self.api_config.dataset_token)
-        self.datasets = self.dataset_api.get_datasets(max_attempt=3)
+                setattr(self.studios, app, Studio(AppApi(self.api_config.url, app_token)))
+        self.datasets = []
+        if include_dataset:
+            self.dataset_api = DatasetApi(self.api_config.url, self.api_config.dataset_token)
+            self.datasets = self.dataset_api.get_datasets(max_attempt=3)
         self.record_db = RecordDatabase('record')
         self._s3 = None
         self._dify_db = None
@@ -83,14 +89,6 @@ class DifyPlatform(object):
                 and re.search(r'[^\s\n]', json_str[last_quote_index + 1:last_brace_index])):
             json_str = json_str[:last_brace_index] + '"' + json_str[last_brace_index:]
         return json_str
-
-    def analyze_content(self, app_api, query: str):
-        response = app_api.query_ai_agent(query, stream=True)
-        try:
-            answer = json.loads(self.fix_json_str(response.get('answer', {})))
-        except json.JSONDecodeError:
-            answer = {}
-        return answer
 
     def init_knowledge_base(self, dataset_name):
         dataset_id = self.get_dataset_id_by_name(dataset_name)
