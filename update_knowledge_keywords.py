@@ -1,3 +1,5 @@
+import os
+
 from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 
@@ -27,6 +29,17 @@ def get_dataset_document_mapping(platform: DifyPlatform, datasets: list, documen
     return mapping
 
 
+def get_keywords(keywords_agent, text, default_keywords: list, document_name: str):
+    try:
+        response = keywords_agent.query(text)
+        if isinstance(response, dict):
+            return response.get('keywords', default_keywords)
+        elif isinstance(response, str) and response.strip() == '':
+            return [os.path.splitext(document_name)[0]]
+    except AttributeError:
+        return default_keywords
+
+
 def main():
     platform = DifyPlatform(env='dev', include_dataset=True)
     dataset_document_mapping = get_dataset_document_mapping(
@@ -40,7 +53,9 @@ def main():
                 document = kb.fetch_documents(source='db', document_id=doc_id, with_segment=True)
                 print(f"Updating keywords for document '{document['name']}' in dataset '{kb.dataset_name}'")
                 for segment in document['segment']:
-                    segment['keywords'] = keywords_agent.query(segment['content']).get('keywords', segment['keywords'])
+                    segment['keywords'] = get_keywords(
+                        keywords_agent, segment['content'], segment['keywords'], document['name']
+                    )
                     kb.update_segment_in_document(segment)
 
 

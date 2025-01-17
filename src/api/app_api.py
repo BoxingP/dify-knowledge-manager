@@ -13,9 +13,13 @@ class AppApi(Api):
     def _is_error(self, response):
         if response.get('event') == 'error' and response.get('code') == 'completion_request_error':
             message = response.get('message', '')
-            error_info = json.loads(message[message.index('{'): message.rindex('}') + 1])
-            if error_info.get('statusCode') == 429:
-                return True
+            try:
+                if '{' in message and '}' in message:
+                    error_info = json.loads(message[message.index('{'): message.rindex('}') + 1])
+                    if error_info.get('statusCode') == 429:
+                        return True
+            except (ValueError, json.JSONDecodeError) as e:
+                print(f'Failed to parse error message: {e}')
         return False
 
     def query_app(self, query, user='python.script', conversation_id='', stream: bool = True,
