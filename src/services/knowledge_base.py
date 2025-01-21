@@ -296,3 +296,13 @@ class KnowledgeBase(object):
                         )
             docs_name_id_mapping[document['name']] = document_id
         return docs_name_id_mapping
+
+    def get_image_paths(self, image_uuids: list[str]):
+        image_paths = {}
+
+        for image_uuid in image_uuids:
+            image_path = self.db.get_image_path(image_uuid)
+            if image_path is None:
+                continue
+            image_paths[image_uuid] = image_path
+        return image_paths

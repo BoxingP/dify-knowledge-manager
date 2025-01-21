@@ -60,36 +60,6 @@ class DifyPlatform(object):
                 break
         return dataset_id
 
-    def download_images_to_local(self, image_uuids: list, skip_if_exists=False):
-        if self.dify_db is None:
-            raise Exception('Dify database is not set')
-        image_paths = {}
-        for uuid in image_uuids:
-            image_path_in_dify = self.dify_db.get_image_path(uuid)
-            if image_path_in_dify is None:
-                continue
-            image_path = config.image_dir_path / image_path_in_dify.name
-            if skip_if_exists and image_path.exists():
-                print(f'skip downloading image "{image_path_in_dify.name}" as it already exists')
-                image_paths[uuid] = image_path
-                continue
-            if self.s3.find_and_download_file(
-                    str(image_path_in_dify.as_posix()), config.image_dir_path, skip_if_exists
-            ):
-                image_paths[uuid] = image_path
-        return image_paths
-
-    def fix_json_str(self, json_str):
-        json_str = re.sub(r'^[^{]*', '', json_str)
-        json_str = re.sub(r'\s*[^}\n]*$', '', json_str)
-        last_quote_index = json_str.rfind('"')
-        last_right_square_index = json_str.rfind(']')
-        last_brace_index = json_str.rfind('}')
-        if (last_quote_index > last_right_square_index
-                and re.search(r'[^\s\n]', json_str[last_quote_index + 1:last_brace_index])):
-            json_str = json_str[:last_brace_index] + '"' + json_str[last_brace_index:]
-        return json_str
-
     def init_knowledge_base(self, dataset_name):
         dataset_id = self.get_dataset_id_by_name(dataset_name)
         return KnowledgeBase(dataset_id, dataset_name, self.dataset_api, self.dify_db, self.record_db)
