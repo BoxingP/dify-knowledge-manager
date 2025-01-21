@@ -31,7 +31,9 @@ def get_dataset_document_mapping(platform: DifyPlatform, datasets: list, documen
 
 def get_keywords(keywords_agent, text, default_keywords: list, document_name: str):
     try:
-        response = keywords_agent.query(text)
+        response = keywords_agent.query_app(text, parse_json=True, streaming_mode=True)
+        if response is None or response == {}:
+            return default_keywords
         if isinstance(response, dict):
             return response.get('keywords', default_keywords)
         elif isinstance(response, str) and response.strip() == '':
