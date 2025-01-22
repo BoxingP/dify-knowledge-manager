@@ -1,6 +1,7 @@
 import os
 
 from src.services.dify_platform import DifyPlatform
+from src.services.keywords_agent import KeywordsAgent
 from src.utils.config import config
 
 
@@ -29,34 +30,24 @@ def get_dataset_document_mapping(platform: DifyPlatform, datasets: list, documen
     return mapping
 
 
-def get_keywords(keywords_agent, text, default_keywords: list, document_name: str):
-    try:
-        response = keywords_agent.query_app(text, parse_json=True, streaming_mode=True)
-        if response is None or response == {}:
-            return default_keywords
-        if isinstance(response, dict):
-            return response.get('keywords', default_keywords)
-        elif isinstance(response, str) and response.strip() == '':
-            return [os.path.splitext(document_name)[0]]
-    except AttributeError:
-        return default_keywords
-
-
 def main():
     platform = DifyPlatform(env='dev', include_dataset=True)
     dataset_document_mapping = get_dataset_document_mapping(
         platform, config.keywords_datasets, config.keywords_documents
     )
     if dataset_document_mapping:
-        keywords_agent = DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studios.keywords
+        keywords_agent = KeywordsAgent(
+            DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studios.keywords.app_pai
+        )
         for item in dataset_document_mapping:
             kb = platform.init_knowledge_base(item['dataset'])
             for doc_id in item['document_ids']:
                 document = kb.fetch_documents(source='db', document_id=doc_id, with_segment=True)
                 print(f"Updating keywords for document '{document['name']}' in dataset '{kb.dataset_name}'")
                 for segment in document['segment']:
-                    segment['keywords'] = get_keywords(
-                        keywords_agent, segment['content'], segment['keywords'], document['name']
+                    default_keywords = segment['keywords'] + [os.path.splitext(document['name'])[0]]
+                    segment['keywords'] = keywords_agent.get_keywords(
+                        text=segment['content'], default_keywords=default_keywords
                     )
                     kb.update_segment_in_document(segment)
 

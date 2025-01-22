@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 
 from src.database.record_database import RecordDatabase
 from src.services.dify_platform import DifyPlatform
+from src.services.keywords_agent import KeywordsAgent
 from src.utils.config import config
 from src.utils.proofpoint_url_decoder import decode_ppv3
 from src.utils.web_scraper import scrape_web_page_content
@@ -91,10 +92,10 @@ def get_kb_name_by_category(info, category):
     return None
 
 
-def extract_info(row):
+def extract_info(row, keywords_agent: KeywordsAgent = None):
     delimiter = '\n'
 
-    def create_segment(category, content, summary=True):
+    def create_segment(category, content, keywords_agent: KeywordsAgent = None, summary: bool = True):
         title = content['title']['cn']
         source = content['source']
         date = re.search(r'(\d{1,2})/(\d{1,2})-(\d{4})', source)
@@ -106,17 +107,19 @@ def extract_info(row):
         else:
             content_field = f'# details{delimiter}{content["details"]}'
 
+        content_str = (
+            f'# category{delimiter}{category.lower()}{delimiter}{delimiter}'
+            f'# title{delimiter}{title}{delimiter}{delimiter}'
+            f'# date{delimiter}{date_str}{delimiter}{delimiter}'
+            f'# source{delimiter}{source}{delimiter}{delimiter}'
+            f'# url{delimiter}{content["url"]}{delimiter}{delimiter}'
+            f'{content_field}'
+        )
         return {
-            'content': (
-                f'# category{delimiter}{category.lower()}{delimiter}{delimiter}'
-                f'# title{delimiter}{title}{delimiter}{delimiter}'
-                f'# date{delimiter}{date_str}{delimiter}{delimiter}'
-                f'# source{delimiter}{source}{delimiter}{delimiter}'
-                f'# url{delimiter}{content["url"]}{delimiter}{delimiter}'
-                f'{content_field}'
-            ),
+            'content': content_str,
             'answer': None,
-            'keywords': [],
+            'keywords': []
+            if keywords_agent is None else keywords_agent.get_keywords(text=content_str, default_keywords=[]),
             'enabled': True
         }
 
@@ -125,8 +128,8 @@ def extract_info(row):
     for item in row['cleaned_body']:
         category = item['category']
         for content in item['content']:
-            summary_segment.append(create_segment(category, content, summary=True))
-            details_segment.append(create_segment(category, content, summary=False))
+            summary_segment.append(create_segment(category, content, keywords_agent, summary=True))
+            details_segment.append(create_segment(category, content, keywords_agent, summary=False))
 
     document_name = f'{row["subject"]} - {row["sent_on"][:4]}'
 
@@ -360,12 +363,12 @@ def process_info(info, key: str, dify, record_db, doc_sync_config, source):
 
 def upload_mails_to_knowledge_base(env, mails_category: list, doc_sync_config: dict, sync_summary: bool = True,
                                    sync_details: bool = True, get_recent_updated: bool = None,
-                                   time_delta: relativedelta = None):
+                                   time_delta: relativedelta = None, keywords_agent: KeywordsAgent = None):
     dify = DifyPlatform(env)
     record_db = RecordDatabase('record')
     mails = record_db.get_mails(mails_category, get_recent_updated=get_recent_updated, time_delta=time_delta)
     if not mails.empty:
-        info = mails.apply(extract_info, axis=1).tolist()
+        info = mails.apply(extract_info, axis=1, args=(keywords_agent,)).tolist()
         if sync_summary:
             process_info(info, 'summary', dify, record_db, doc_sync_config, source='db')
         if sync_details:
@@ -378,6 +381,9 @@ def main():
     record_mails(mails)
     time_delta = relativedelta(days=1)
     process_mails(time_delta=time_delta, force_convert=False)
+    keywords_agent = KeywordsAgent(
+        DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studios.keywords.app_pai
+    )
     upload_mails_to_knowledge_base(
         env='dev',
         mails_category=['china daily news'],
@@ -385,7 +391,8 @@ def main():
         sync_summary=True,
         sync_details=True,
         get_recent_updated=True,
-        time_delta=time_delta
+        time_delta=time_delta,
+        keywords_agent=keywords_agent
     )
 
 
