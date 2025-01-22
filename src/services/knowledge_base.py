@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Union, Optional
 
+import pandas as pd
 from PIL import Image
 from docx import Document
 from docx.image.exceptions import UnrecognizedImageError
@@ -26,8 +27,9 @@ class SplitCountExceeded(Exception):
 
 
 class KnowledgeBase(object):
-    def __init__(self, dataset_id, dataset_name, api: DatasetApi,
+    def __init__(self, env, dataset_id, dataset_name, api: DatasetApi,
                  db: DifyDatabase = None, record_db: RecordDatabase = None):
+        self.env = env
         self.dataset_id = dataset_id
         self.dataset_name = dataset_name
         self.api = api
@@ -141,7 +143,8 @@ class KnowledgeBase(object):
         return None
 
     @timing
-    def sync_documents(self, documents: Union[dict, list[dict]], sync_config: DocumentSyncConfig) -> dict:
+    def sync_documents(self, documents: Union[dict, list[dict]], sync_config: DocumentSyncConfig,
+                       source: str = 'api') -> dict:
         documents = self._handle_and_sort_text(documents, sync_config.preserve_document_order)
         for doc in documents:
             if 'segment' in doc:
@@ -156,8 +159,12 @@ class KnowledgeBase(object):
                 print(f'Skip existing document: {doc_name}')
         else:
             if sync_config.replace_existing:
+                if sync_config.backup:
+                    self.backup_documents(document_ids=existing_ids, source=source)
                 self.delete_document(existing_ids)
         if sync_config.remove_extra:
+            if sync_config.backup:
+                self.backup_documents(document_ids=existing_ids, source=source)
             self.delete_document(extra_ids)
 
         return self.create_document_by_text(documents)
@@ -306,3 +313,25 @@ class KnowledgeBase(object):
                 continue
             image_paths[image_uuid] = image_path
         return image_paths
+
+    def backup_documents(self, document_ids: list[str], source: str = 'api'):
+        documents = []
+        for doc_id in document_ids:
+            document = self.fetch_documents(source=source, document_id=doc_id, with_segment=True)
+            if document is None:
+                continue
+            documents.append(document)
+        rows = []
+        for doc in documents:
+            for segment in doc['segment']:
+                rows.append({
+                    'document_name': doc['name'],
+                    'segment_position': segment['position'],
+                    'content': segment['content'],
+                    'answer': segment['answer'],
+                    'keywords': segment['keywords'],
+                })
+        documents_df = pd.DataFrame(rows)
+        documents_df['environment'] = self.env
+        documents_df['dataset_name'] = self.dataset_name
+        self.record_db.backup_documents(documents=documents_df)

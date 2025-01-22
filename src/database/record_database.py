@@ -10,16 +10,20 @@ from sqlalchemy.exc import ProgrammingError
 from src.database.database import Database, database_session
 from src.models.record_database.agents import Agents
 from src.models.record_database.datasets import Datasets
+from src.models.record_database.document_backups import DocumentBackups
 from src.models.record_database.document_segments import DocumentSegments
 from src.models.record_database.documents import Documents
 from src.models.record_database.docx_files import DocxFiles
 from src.models.record_database.mails import Mails
 from src.models.record_database.mails_documents_mapping import MailsDocumentsMapping
+from src.utils.config import config
+from src.utils.random_generator import random_name
 
 
 class RecordDatabase(Database):
     def __init__(self, database_name: str):
         super(RecordDatabase, self).__init__(database_name)
+        self.tag = self._generate_tag()
 
     def save_knowledge_base_info(self, knowledge_base: dict):
         table = Datasets
@@ -311,3 +315,29 @@ class RecordDatabase(Database):
                 new_mapping = table(mail_id=mail_id, document_id=document_id)
                 session.add(new_mapping)
                 session.commit()
+
+    def backup_documents(self, documents, ignored_columns=None):
+        documents['tag'] = self.tag
+        print(f'Backing up {documents["document_name"].nunique()} documents with tag "{self.tag}" to database')
+        table = DocumentBackups
+        self.create_table_if_not_exists(table)
+        self.update_or_insert_data(documents, table, ignored_columns=ignored_columns)
+
+    def _generate_tag(self):
+        datetime_str = config.get_datetime(to_str=True)
+        try:
+            with database_session(self.session) as session:
+                query = session.query(
+                    func.substring(DocumentBackups.tag, 10).label('name')
+                ).filter(DocumentBackups.tag.like(f'{datetime_str}%'))
+                results = query.all()
+            names = [result.name for result in results]
+        except ProgrammingError as e:
+            if f'relation "{DocumentBackups.__tablename__}" does not exist' in str(e):
+                names = []
+            else:
+                raise e
+        name = random_name()
+        while name in names:
+            name = random_name()
+        return f'{datetime_str}.{name}'

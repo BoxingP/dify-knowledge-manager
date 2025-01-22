@@ -21,6 +21,7 @@ sync:
     remove_extra: false
     preserve_document_order: true
     preserve_segment_order: true
+    backup: true
     dataset_mapping:
       - source:
         target:

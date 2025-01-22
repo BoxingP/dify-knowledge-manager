@@ -21,7 +21,8 @@ class Config(object):
         return cls._instance
 
     def _initialize(self):
-        self.initial_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+        self.local_tz = datetime.datetime.now().astimezone().tzinfo
+        self.initial_datetime = datetime.datetime.now(self.local_tz)
         load_dotenv()
         self._load_app_config()
         self._load_env_variables()
@@ -157,6 +158,7 @@ class Config(object):
             remove_extra=scenario_config.get('remove_extra'),
             preserve_document_order=scenario_config.get('preserve_document_order'),
             preserve_segment_order=scenario_config.get('preserve_segment_order'),
+            backup=scenario_config.get('backup'),
             dataset_mapping=scenario_config.get('dataset_mapping', [])
         )
 
@@ -169,6 +171,27 @@ class Config(object):
                 if subfolder.get('category').lower() == category.lower():
                     return subfolder.get('dataset')
         return None
+
+    def get_datetime(self, year=None, month=None, day=None, hour=None, minute=None, second=None, microsecond=None,
+                     offset=0, in_utc=False, to_str=False, str_format='%Y%m%d'):
+        target_datetime = self.initial_datetime
+        replacements = {
+            'year': year,
+            'month': month,
+            'day': day,
+            'hour': hour,
+            'minute': minute,
+            'second': second,
+            'microsecond': microsecond
+        }
+        target_datetime = target_datetime.replace(**{k: v for k, v in replacements.items() if v is not None})
+        target_datetime = target_datetime + datetime.timedelta(days=offset)
+        if in_utc:
+            target_datetime = target_datetime.astimezone(datetime.timezone.utc)
+        if to_str:
+            return target_datetime.strftime(str_format)
+        else:
+            return target_datetime
 
 
 config = Config()

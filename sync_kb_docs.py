@@ -15,15 +15,16 @@ def filter_documents(documents):
 
 
 @timing
-def sync_documents_to_target_knowledge_base(source_kb, target_kb, sync_config, source='api', record_documents=True):
+def sync_documents_to_target_knowledge_base(source_kb, target_kb, sync_config, source: str = 'api',
+                                            archive_source: bool = False):
     source_documents = source_kb.fetch_documents(source=source, with_segment=True, is_enabled=True)
     filtered_documents = filter_documents(source_documents)
     print(
         f"Fetching completed: {len(filtered_documents)} source files in dataset '{source_kb.dataset_name}' from '{source}'"
     )
     if filtered_documents:
-        target_kb.sync_documents(documents=filtered_documents, sync_config=sync_config)
-        if record_documents:
+        target_kb.sync_documents(documents=filtered_documents, sync_config=sync_config, source=source)
+        if archive_source:
             source_kb.record_knowledge_base_info()
             source_kb.record_documents(filtered_documents)
 
@@ -74,7 +75,9 @@ def main():
     for mapping in doc_sync_config.dataset_mapping:
         source_kb = source_dify.init_knowledge_base(mapping.get('source'))
         target_kb = target_dify.init_knowledge_base(mapping.get('target'))
-        sync_documents_to_target_knowledge_base(source_kb, target_kb, sync_config=doc_sync_config, source='db')
+        sync_documents_to_target_knowledge_base(
+            source_kb, target_kb, sync_config=doc_sync_config, source='db', archive_source=True
+        )
     for mapping in doc_sync_config.dataset_mapping:
         source_kb = source_dify.init_knowledge_base(mapping.get('source'))
         target_kb = target_dify.init_knowledge_base(mapping.get('target'))

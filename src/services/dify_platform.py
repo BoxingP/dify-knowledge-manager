@@ -62,4 +62,4 @@ class DifyPlatform(object):
 
     def init_knowledge_base(self, dataset_name):
         dataset_id = self.get_dataset_id_by_name(dataset_name)
-        return KnowledgeBase(dataset_id, dataset_name, self.dataset_api, self.dify_db, self.record_db)
+        return KnowledgeBase(self.env, dataset_id, dataset_name, self.dataset_api, self.dify_db, self.record_db)

@@ -8,4 +8,5 @@ class DocumentSyncConfig(object):
     remove_extra: bool
     preserve_document_order: bool
     preserve_segment_order: bool
+    backup: bool
     dataset_mapping: list
