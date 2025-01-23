@@ -30,7 +30,8 @@ class DriverFactory(object):
         '--disable-gpu',
         '--hide-scrollbars',
         '--single-process',
-        '--disable-dev-shm-usage'
+        '--disable-dev-shm-usage',
+        '--disable-infobars'
     ]
 
     @staticmethod
