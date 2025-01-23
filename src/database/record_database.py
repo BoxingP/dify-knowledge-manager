@@ -16,6 +16,7 @@ from src.models.record_database.documents import Documents
 from src.models.record_database.docx_files import DocxFiles
 from src.models.record_database.mails import Mails
 from src.models.record_database.mails_documents_mapping import MailsDocumentsMapping
+from src.models.record_database.news import News
 from src.utils.config import config
 from src.utils.random_generator import random_name
 
@@ -341,3 +342,18 @@ class RecordDatabase(Database):
         while name in names:
             name = random_name()
         return f'{datetime_str}.{name}'
+
+    def save_news(self, news, ignored_columns=None):
+        table = News
+        self.create_table_if_not_exists(table)
+        self.update_or_insert_data(news, table, ignored_columns=ignored_columns)
+
+    def get_news(self, url):
+        with database_session(self.session) as session:
+            table = News
+            query = session.query(table.summary, table.details).filter(table.url == url)
+            result = query.first()
+            if result:
+                return result.summary, result.details
+            else:
+                return '', ''

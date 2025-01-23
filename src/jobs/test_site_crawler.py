@@ -1,7 +1,9 @@
 import os
 
+import pandas as pd
 import pytest
 
+from src.database.record_database import RecordDatabase
 from src.pages.news_page import NewsPage
 
 
@@ -9,7 +11,14 @@ from src.pages.news_page import NewsPage
 class TestSiteCrawler(object):
     def test_extract_news(self):
         news_page = NewsPage(self.driver)
-        summary, details = news_page.extract_news(os.environ.get('URL_TO_SCRAPE'))
-        os.environ['SUMMARY'] = summary
-        os.environ['DETAILS'] = details
+        url = os.environ.get('URL_TO_SCRAPE')
+        summary, details = news_page.extract_news(url)
+        record_db = RecordDatabase('record')
+        record_db.save_news(
+            pd.DataFrame({
+                'url': [url],
+                'summary': [summary],
+                'details': [details]
+            })
+        )
         assert True
