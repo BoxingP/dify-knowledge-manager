@@ -1,7 +1,6 @@
 import os
 
 from src.services.dify_platform import DifyPlatform
-from src.services.keywords_agent import KeywordsAgent
 from src.utils.config import config
 
 
@@ -36,9 +35,7 @@ def main():
         platform, config.keywords_datasets, config.keywords_documents
     )
     if dataset_document_mapping:
-        keywords_agent = KeywordsAgent(
-            DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studios.keywords.app_pai
-        )
+        keywords_agent = DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studio.get_app('keywords')
         for item in dataset_document_mapping:
             kb = platform.init_knowledge_base(item['dataset'])
             for doc_id in item['document_ids']:

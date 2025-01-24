@@ -2,7 +2,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import requests
 
@@ -10,11 +10,11 @@ from src.api.response import Response
 
 
 class Api(object):
-    def __init__(self, base_url: str, secret_header: Optional[Dict[str, Any]] = None):
+    def __init__(self, base_url: str, secret_header: Optional[dict[str, Any]] = None):
         self.base_url = base_url
         self.secret_header = secret_header or {}
 
-    def request(self, method: str, endpoint: str, **kwargs: Dict[str, Any]) -> Response:
+    def request(self, method: str, endpoint: str, **kwargs: dict[str, Any]) -> Response:
         url = f'{self.base_url}/{endpoint}'
         max_attempt = kwargs.pop('max_attempt', 1)
         sleep_rate = kwargs.pop('sleep_rate', 1.0)
@@ -38,9 +38,10 @@ class Api(object):
                 time.sleep(sleep_time)
 
             if attempt == max_attempt - 1:
+                print(f'Failed to get API response at {url} after {max_attempt} attempts')
                 return Response(None, None)
 
-    def _process_response(self, response: requests.Response, kwargs: Dict[str, Any]) -> Response:
+    def _process_response(self, response: requests.Response, kwargs: dict[str, Any]) -> Response:
         if kwargs.get('stream', False):
             events = [
                 json.loads(match.group(1))
@@ -51,20 +52,36 @@ class Api(object):
             return Response(response.status_code, events)
         return Response(response.status_code, response.json())
 
-    def _merge_headers(self, headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    def _merge_headers(self, headers: Optional[dict[str, str]] = None) -> dict[str, str]:
         headers = headers or {}
         headers.update(self.secret_header)
         return headers
 
-    def _prepare_data(self, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _prepare_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         data = kwargs.pop('data', None)
-        file_path = kwargs.pop('file_path', None)
-        if data is not None:
-            if file_path and isinstance(file_path, Path):
-                data = {'data': (None, json.dumps(data), 'text/plain')}
-                kwargs['files'] = {**data, 'file': (file_path.name, open(file_path, 'rb'))}
-            else:
+        raw_file_path = kwargs.pop('file_path', None)
+        files = kwargs.pop('files', None)
+
+        if data is not None and raw_file_path is not None:
+            if not isinstance(raw_file_path, (str, Path)):
+                raise TypeError(f'file_path must be a string or Path-like object, not {type(raw_file_path).__name__}')
+            file_path = Path(raw_file_path)
+
+            data_part = (None, json.dumps(data), 'text/plain')
+            file_part = (file_path.name, open(file_path, 'rb'))
+            files = {'data': data_part, 'file': file_part}
+            kwargs['files'] = files
+            if 'headers' in kwargs:
+                kwargs['headers'].pop('Content-Type', None)
+        elif data is not None:
+            headers = kwargs.get('headers', {})
+            if headers.get('Content-Type') == 'application/json':
                 kwargs['json'] = data
+            else:
+                kwargs['data'] = data
+
+        if files is not None:
+            kwargs['files'] = files
 
         return kwargs
 

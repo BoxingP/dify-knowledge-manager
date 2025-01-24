@@ -103,7 +103,7 @@ def process_file(dify, file, summary_kb, details_kb):
     document_df = docx_content.document
 
     document_str = handler.convert_to_str(docx_content, image_reference_type='dify', knowledge_base=details_kb)
-    summary_agent = dify.studios.summary
+    summary_agent = dify.studio.get_app('summary')
     response = summary_agent.query_app(document_str, parse_json=True, streaming_mode=False)
     document_name, release_date, origin_link = extract_document_info(document_df, document_str)
 

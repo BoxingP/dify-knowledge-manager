@@ -381,9 +381,7 @@ def main():
     record_mails(mails)
     time_delta = relativedelta(days=1)
     process_mails(time_delta=time_delta, force_convert=False)
-    keywords_agent = KeywordsAgent(
-        DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studios.keywords.app_pai
-    )
+    keywords_agent = DifyPlatform(env='dev', apps=['keywords'], include_dataset=False).studio.get_app('keywords')
     upload_mails_to_knowledge_base(
         env='dev',
         mails_category=['china daily news'],

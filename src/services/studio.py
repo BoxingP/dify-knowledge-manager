@@ -1,45 +1,45 @@
-import json
-import re
+import importlib
+from types import SimpleNamespace
+from typing import Optional, Any
 
 from src.api.app_api import AppApi
+from src.services.app_factory import AppFactory
 
 
 class Studio(object):
-    def __init__(self, app_pai: AppApi):
-        self.app_pai = app_pai
+    def __init__(self, apps: Optional[list[str]], api_config):
+        self.module_name = 'src.services'
+        self.apps = apps
+        self.api_config = api_config
+        self.app_factory = AppFactory()
+        if self.apps is not None:
+            self.app_apis = SimpleNamespace()
+            for app in self.apps:
+                app_token = getattr(self.api_config, f'{app}_app_token')
+                setattr(self.app_apis, app, AppApi(self.api_config.url, app_token))
+            self._register_apps()
 
-    def query_app(self, user_input, parse_json: bool = True, streaming_mode: bool = True):
-        response = self.app_pai.send_query(user_input=user_input, streaming_mode=streaming_mode)
+    def get_app(self, app_name: str):
+        if hasattr(self.app_apis, app_name):
+            return self.app_factory.create_app(app_name, getattr(self.app_apis, app_name))
+        else:
+            raise ValueError(f'"{app_name}" app is not configured in the studio')
 
-        try:
-            if not isinstance(response, dict):
-                print(f'TypeError: response is not a dictionary: {type(response)}')
-                return None
-            elif 'answer' not in response:
-                print(f'KeyError: response does not contain an answer')
-                return None
-            answer = response.get('answer', '')
+    def _register_apps(self):
+        app_mapping = self._generate_app_mapping()
+        for app, app_class in app_mapping.items():
+            self.app_factory.register_app(app, app_class)
 
-            if parse_json and answer:
-                return self._attempt_json_parse(answer)
-            return answer
-        except Exception as e:
-            print(f'Error: {e}')
-            return None
+    def _generate_app_mapping(self) -> dict[str, Any]:
+        app_mapping = {}
+        for app in self.apps:
+            app_class = self._get_app_class(app)
+            if app_class:
+                app_mapping[app] = app_class
+        return app_mapping
 
-    def _attempt_json_parse(self, answer):
-        try:
-            return json.loads(self._sanitize_json_response(answer))
-        except json.JSONDecodeError:
-            return {}
-
-    def _sanitize_json_response(self, raw_json_str):
-        raw_json_str = re.sub(r'^[^{]*', '', raw_json_str)
-        raw_json_str = re.sub(r'\s*[^}\n]*$', '', raw_json_str)
-        last_quote_index = raw_json_str.rfind('"')
-        last_right_square_index = raw_json_str.rfind(']')
-        last_brace_index = raw_json_str.rfind('}')
-        if (last_quote_index > last_right_square_index
-                and re.search(r'[^\s\n]', raw_json_str[last_quote_index + 1:last_brace_index])):
-            raw_json_str = raw_json_str[:last_brace_index] + '"' + raw_json_str[last_brace_index:]
-        return raw_json_str
+    def _get_app_class(self, app_name: str):
+        class_name = f'{app_name.capitalize()}Agent'
+        module_path = f'{self.module_name}.{app_name}_agent'
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name, None)

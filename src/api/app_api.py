@@ -1,40 +1,44 @@
 import json
-import random
-import time
-
-from urllib3.exceptions import ConnectTimeoutError
+from pathlib import Path
 
 from src.api.api import Api
 
 
 class AppApi(Api):
+    SUPPORTED_MIME_TYPE = {
+        'png': 'image/png',
+        'jpeg': 'image/jpeg',
+        'jpg': 'image/jpg',
+        'webp': 'image/webp',
+        'gif': 'image/gif'
+    }
+
     def __init__(self, url, secret_key):
         super(AppApi, self).__init__(base_url=url, secret_header={'Authorization': f'Bearer {secret_key}'})
+        self.user = 'python.script'
 
-    def send_query(self, user_input, user_id: str = 'python.script', session_id: str = '', streaming_mode: bool = True,
-                   retry_attempts=3, retry_backoff=1):
+    def send_query(self, user_input, user: str = None, session_id: str = '', streaming_mode: bool = True,
+                   files: list = None, max_attempt=3, sleep_rate=1):
         headers = {'Content-Type': 'application/json'}
         payload = {
             'inputs': {},
             'query': user_input,
             'response_mode': 'streaming' if streaming_mode else 'blocking',
             'conversation_id': session_id,
-            'user': user_id,
-            'files': []
+            'user': user if user is not None else self.user,
+            'files': files if files is not None else []
         }
 
-        for attempt in range(retry_attempts):
-            try:
-                response = self.post('chat-messages', headers=headers, data=payload, stream=streaming_mode)
-                if response.data:
-                    return self._process_response_data(response.data, streaming_mode)
-            except ConnectTimeoutError:
-                print(f'Attempt {attempt + 1} failed due to timeout')
-            if attempt < retry_attempts - 1:
-                sleep_time = retry_backoff * (2 ** attempt) + random.uniform(0, 1)
-                time.sleep(sleep_time)
-
-        raise ConnectTimeoutError(f'Failed to get API response at {self.base_url}')
+        response = self.post(
+            endpoint='chat-messages',
+            headers=headers,
+            data=payload,
+            stream=streaming_mode,
+            max_attempt=max_attempt,
+            sleep_rate=sleep_rate
+        )
+        if response.data:
+            return self._process_response_data(response.data, streaming_mode)
 
     def _process_response_data(self, response_data, streaming_mode):
         if streaming_mode and isinstance(response_data, list):
@@ -81,3 +85,24 @@ class AppApi(Api):
             except (ValueError, json.JSONDecodeError) as e:
                 print(f'Failed to parse error message: {e}')
         return False
+
+    def upload_file(self, file_path: Path, user: str = None) -> str:
+        file_extension = file_path.suffix.lower().lstrip('.')
+        mime_type = self.SUPPORTED_MIME_TYPE.get(file_extension)
+        if mime_type is None:
+            supported_extensions = ', '.join(f'"{ext}"' for ext in self.SUPPORTED_MIME_TYPE.keys())
+            print(supported_extensions)
+            raise ValueError(
+                f'Unsupported file extension: "{file_extension}", only {supported_extensions} are supported'
+            )
+
+        data = {
+            'user': user if user is not None else self.user
+        }
+        files = {
+            'file': (file_path.name, open(file_path, 'rb'), mime_type)
+        }
+        response = self.post(
+            endpoint='files/upload', files=files, data=data
+        )
+        return getattr(response, 'data', {}).get('id', '')

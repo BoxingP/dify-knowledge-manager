@@ -1,11 +1,11 @@
 from typing import Optional
 
-from src.services.studio import Studio
+from src.services.app import App
 
 
-class KeywordsAgent(Studio):
-    def __init__(self, app_pai):
-        super(KeywordsAgent, self).__init__(app_pai)
+class KeywordsAgent(App):
+    def __init__(self, app_api):
+        super(KeywordsAgent, self).__init__(app_api)
 
     def get_keywords(self, text: str, default_keywords: Optional[list[str]] = None) -> list:
         if default_keywords is None:
