@@ -3,8 +3,8 @@ paths:
   root_dir: /,tmp,dify
   sub_dirs:
     image_dir: assets,image_files
-    word_dir: assets,word_files
     convert_dir: assets,image_files,converted
+    word_dir: assets,word_files
     upload_dir: upload
     download_dir: download
 sync:

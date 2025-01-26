@@ -1,13 +1,38 @@
 import json
 import re
+from pathlib import Path
 
 
 class App(object):
     def __init__(self, app_api):
         self.app_api = app_api
+        self.user = 'python.script'
 
-    def query_app(self, user_input, parse_json: bool = True, streaming_mode: bool = True):
-        response = self.app_api.send_query(user_input=user_input, streaming_mode=streaming_mode)
+    def query_app(self, user_input, streaming_mode: bool = True, session_id: str = '', user: str = '',
+                  files: list[Path] = None, parse_json: bool = True):
+        if not user:
+            user = self.user
+
+        file_ids = []
+        if files is not None:
+            if len(files) > 3:
+                raise ValueError('The number of files should be less than or equal to 3')
+
+            for file_path in files:
+                file_id = self.app_api.upload_file(file_path=file_path, user=user)
+                file_ids.append(file_id)
+        files_data = [{
+            'type': 'image',
+            'transfer_method': 'local_file',
+            'upload_file_id': file_id
+        } for file_id in file_ids] if file_ids else []
+        response = self.app_api.send_query(
+            user_input=user_input,
+            streaming_mode=streaming_mode,
+            session_id=session_id,
+            user=user,
+            files=files_data,
+        )
 
         try:
             if not isinstance(response, dict):

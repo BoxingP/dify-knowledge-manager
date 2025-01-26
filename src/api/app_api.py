@@ -15,17 +15,16 @@ class AppApi(Api):
 
     def __init__(self, url, secret_key):
         super(AppApi, self).__init__(base_url=url, secret_header={'Authorization': f'Bearer {secret_key}'})
-        self.user = 'python.script'
 
-    def send_query(self, user_input, user: str = None, session_id: str = '', streaming_mode: bool = True,
-                   files: list = None, max_attempt=3, sleep_rate=1):
+    def send_query(self, user_input, streaming_mode: bool, session_id: str, user: str, files: list = None,
+                   max_attempt=3, sleep_rate=1):
         headers = {'Content-Type': 'application/json'}
         payload = {
             'inputs': {},
             'query': user_input,
             'response_mode': 'streaming' if streaming_mode else 'blocking',
             'conversation_id': session_id,
-            'user': user if user is not None else self.user,
+            'user': user,
             'files': files if files is not None else []
         }
 
@@ -86,7 +85,7 @@ class AppApi(Api):
                 print(f'Failed to parse error message: {e}')
         return False
 
-    def upload_file(self, file_path: Path, user: str = None) -> str:
+    def upload_file(self, file_path: Path, user: str) -> str:
         file_extension = file_path.suffix.lower().lstrip('.')
         mime_type = self.SUPPORTED_MIME_TYPE.get(file_extension)
         if mime_type is None:
@@ -97,7 +96,7 @@ class AppApi(Api):
             )
 
         data = {
-            'user': user if user is not None else self.user
+            'user': user
         }
         files = {
             'file': (file_path.name, open(file_path, 'rb'), mime_type)
