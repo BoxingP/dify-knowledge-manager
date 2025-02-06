@@ -161,11 +161,11 @@ class KnowledgeBase(object):
             if sync_config.replace_existing:
                 if sync_config.backup:
                     self.backup_documents(document_ids=existing_ids, source=source)
-                self.delete_document(existing_ids)
+                self.delete_documents(existing_ids)
         if sync_config.remove_extra:
             if sync_config.backup:
                 self.backup_documents(document_ids=existing_ids, source=source)
-            self.delete_document(extra_ids)
+            self.delete_documents(extra_ids)
 
         return self.create_document_by_text(documents)
 
@@ -187,7 +187,7 @@ class KnowledgeBase(object):
         self._wait_document_embedding(batch_id, document_id)
         return document_id
 
-    def delete_document(self, document_ids: list[str]):
+    def delete_documents(self, document_ids: list[str]):
         for document_id in document_ids:
             if document_id:
                 self.api.delete_document(self.dataset_id, document_id)
@@ -220,7 +220,7 @@ class KnowledgeBase(object):
                 document = self.fetch_documents('api', document_id=document_id, with_segment=True, with_image=True)
                 images.extend(document['image'])
         images_mapping.update(dict(zip(images_path, images)))
-        self.delete_document(docs_with_images)
+        self.delete_documents(docs_with_images)
 
         return images_mapping
 
@@ -335,3 +335,18 @@ class KnowledgeBase(object):
         documents_df['environment'] = self.env
         documents_df['dataset_name'] = self.dataset_name
         self.record_db.backup_documents(documents=documents_df)
+
+    def disable_documents(self, document_ids: list[str], source: str = 'api'):
+        documents = []
+        for doc_id in document_ids:
+            document = self.fetch_documents(source=source, document_id=doc_id, with_segment=True)
+            if document is None:
+                continue
+            documents.append(document)
+        for doc in documents:
+            for segment in doc['segment']:
+                if not segment.get('enabled'):
+                    continue
+                segment['enabled'] = False
+                self.update_segment_in_document(segment)
+            print(f'Disabled document: {doc["name"]}')

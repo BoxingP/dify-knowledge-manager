@@ -98,6 +98,11 @@ class Config(object):
         self.keywords_datasets = keywords_config.get('datasets', [])
         self.keywords_documents = keywords_config.get('documents', [])
 
+        expired_config = self.app_config.get('expired', {})
+        self.expired_action = expired_config.get('action', '')
+        self.expired_datasets = expired_config.get('datasets', [])
+        self.expired_tags = expired_config.get('tags', [])
+
     def get_db_uri(self, database_name: str):
         name = database_name.upper()
         adapter = os.getenv(f'{name}_DB_ADAPTER')

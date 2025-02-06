@@ -78,3 +78,10 @@ keywords:
   datasets:
     - 'Finance Knowledge Base'
   documents: [ ]
+expired:
+  action: disable
+  datasets:
+    -
+  tags:
+    - '2023'
+    - '2024'
