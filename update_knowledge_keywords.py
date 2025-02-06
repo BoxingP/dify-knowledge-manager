@@ -46,7 +46,14 @@ def main():
                     segment['keywords'] = keywords_agent.get_keywords(
                         text=segment['content'], default_keywords=default_keywords
                     )
-                    kb.update_segment_in_document(segment)
+                    original_status = segment.get('enabled')
+                    if original_status:
+                        kb.update_segment_in_document(segment)
+                    else:
+                        segment['enabled'] = True
+                        kb.update_segment_in_document(segment)
+                        segment['enabled'] = False
+                        kb.update_segment_in_document(segment)
 
 
 if __name__ == '__main__':
