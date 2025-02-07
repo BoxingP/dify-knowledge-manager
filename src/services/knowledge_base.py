@@ -158,11 +158,11 @@ class KnowledgeBase(object):
             for doc_name in existing_doc_names:
                 print(f'Skip existing document: {doc_name}')
         else:
-            if sync_config.replace_existing:
+            if sync_config.replace_existing and existing_ids:
                 if sync_config.backup:
                     self.backup_documents(document_ids=existing_ids, source=source)
                 self.delete_documents(existing_ids)
-        if sync_config.remove_extra:
+        if sync_config.remove_extra and extra_ids:
             if sync_config.backup:
                 self.backup_documents(document_ids=existing_ids, source=source)
             self.delete_documents(extra_ids)
