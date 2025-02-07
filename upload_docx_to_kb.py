@@ -8,6 +8,7 @@ from src.services.dify_platform import DifyPlatform
 from src.utils.config import config
 from src.utils.docx_handler import DocxHandler
 from src.utils.folder_handler import FolderHandler
+from src.utils.hash_calculator import HashCalculator
 from src.utils.time_utils import timing
 
 
@@ -155,6 +156,7 @@ def get_docx_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
     )
     if files_list:
         file_df = pd.DataFrame(columns=['name', 'extension', 'hash'])
+        hash_calculator = HashCalculator()
         for file in files_list:
             docx_file = DocxHandler(file)
             df_temp = pd.DataFrame(
@@ -162,7 +164,7 @@ def get_docx_files(dify, get_specific_documents: bool = False) -> pd.DataFrame:
                     'path': [file],
                     'name': [docx_file.file_path.stem],
                     'extension': [docx_file.file_path.suffix.split('.')[1]],
-                    'hash': [docx_file.calculate_hash()]
+                    'hash': [hash_calculator.calculate_file_hash(docx_file.file_path)]
                 }
             )
             file_df = pd.concat([file_df, df_temp], sort=False)

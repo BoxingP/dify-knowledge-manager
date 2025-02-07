@@ -1,5 +1,4 @@
 import base64
-import hashlib
 import re
 from collections import namedtuple
 from typing import Any, Optional
@@ -21,13 +20,6 @@ class DocxHandler(object):
         self.document = Document(self.file_path)
         self.title_prefix = title_prefix
         self.text_rules = text_rules or {}
-
-    def calculate_hash(self) -> str:
-        with open(self.file_path, 'rb') as f:
-            file_hash = hashlib.sha256()
-            while chunk := f.read(8192):
-                file_hash.update(chunk)
-        return file_hash.hexdigest()
 
     def _extract_block_items(self):
         for child in self.document.element.body.iterchildren():

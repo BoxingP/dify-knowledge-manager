@@ -14,6 +14,7 @@ from src.models.record_database.document_backups import DocumentBackups
 from src.models.record_database.document_segments import DocumentSegments
 from src.models.record_database.documents import Documents
 from src.models.record_database.docx_files import DocxFiles
+from src.models.record_database.keywords import Keywords
 from src.models.record_database.mails import Mails
 from src.models.record_database.mails_documents_mapping import MailsDocumentsMapping
 from src.models.record_database.news import News
@@ -357,3 +358,32 @@ class RecordDatabase(Database):
                 return result.summary, result.details
             else:
                 return '', ''
+
+    def save_keywords(self, hash_value: str, keywords: [str, list], algorithm: str, ignored_columns=None):
+        table = Keywords
+        self.create_table_if_not_exists(table)
+        df = pd.DataFrame([{
+            'hash_value': hash_value,
+            'keywords': keywords,
+            'algorithm': algorithm
+        }])
+        self.update_or_insert_data(df, table, ignored_columns=ignored_columns)
+
+    def get_keywords(self, hash_value: str, algorithm: str) -> list:
+        try:
+            with database_session(self.session) as session:
+                table = Keywords
+                query = session.query(table.keywords).filter(
+                    table.hash_value == hash_value, table.algorithm == algorithm
+                )
+                result = query.first()
+                if result:
+                    return result.keywords
+                else:
+                    return []
+        except ProgrammingError as e:
+            if f'relation "{table.__tablename__}" does not exist' in str(e):
+                print(f'Table "{table.__tablename__}" does not exist')
+                return []
+            else:
+                raise e
